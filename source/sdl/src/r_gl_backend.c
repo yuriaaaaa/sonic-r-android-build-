@@ -6,7 +6,7 @@
  */
 
 /* SOFT=1 builds replace this whole file with r_soft_backend.c. */
-#ifndef SONICR_SOFT_RENDER
+#if !defined(SONICR_SOFT_RENDER) && !defined(SONICR_GLES2)
 
 #ifdef __APPLE__
 #include <OpenGL/gl.h>
@@ -622,4 +622,4 @@ void R_ClearDepth(void)
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-#endif /* !SONICR_SOFT_RENDER */
+#endif /* !SONICR_SOFT_RENDER && !SONICR_GLES2 */

@@ -10,6 +10,9 @@
 
 #include <unistd.h>
 #include <getopt.h>
+#ifdef __ANDROID__
+#include <SDL.h>   /* renames main to SDL_main for SDLActivity */
+#endif
 
 #include "sonicr_types.h"
 #include "sonicr_globals.h"

@@ -20,7 +20,9 @@
 /* SOFT=1 builds replace this whole file with r_soft_backend.c. */
 #ifndef SONICR_SOFT_RENDER
 
-#ifdef __APPLE__
+#ifdef SONICR_GLES2
+#include "r_gles2.h"   /* GLES2 headers + flush-before-GL-call wrappers */
+#elif defined(__APPLE__)
 #include <OpenGL/gl.h>
 #elif defined(_WIN32)
 #include <GL/glew.h>
@@ -38,10 +40,6 @@
 #include "net_transport.h"
 #include "endian_util.h"
 #include <math.h>
-
-#ifdef SONICR_GLES2
-extern void R_GLES2_FlushVerts(void);
-#endif
 
 /* GL backing pixel dimensions (for scissor computation in C code).
  * These reflect the 4:3 viewport area, not the full window. */
@@ -505,6 +503,11 @@ void BeginFrame(void)
     glScalef(dvClipWidth / (float)g_screenWidth,
              -dvClipHeight / (float)g_screenHeight,
              1.0f);
+#else
+    R_GLES2_SetProjection(left, right, bottom, top,
+                          dvClipX, dvClipY,
+                          dvClipWidth / (float)g_screenWidth,
+                          -dvClipHeight / (float)g_screenHeight);
 #endif
 
     /* Reset state tracker to defaults (cull=none, blend=alpha, depth=lequal,

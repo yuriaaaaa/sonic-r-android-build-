@@ -334,6 +334,9 @@ static unsigned char SDLScancodeToDIK(SDL_Scancode sc)
         case SDL_SCANCODE_SPACE:
             return 0x39; /* DIK_SPACE */
         case SDL_SCANCODE_ESCAPE:
+#ifdef __ANDROID__
+        case SDL_SCANCODE_AC_BACK:      /* Android back button / gesture */
+#endif
             return 0x01; /* DIK_ESCAPE */
         case SDL_SCANCODE_LSHIFT:
             return 0x2A; /* DIK_LSHIFT */
@@ -442,6 +445,11 @@ int platform_init(int width, int height, int fullscreen, const char *title)
      * SDL_SetWindowInputFocus actually work. */
     SDL_SetHint(SDL_HINT_FORCE_RAISEWINDOW, "1");
 #endif
+#ifdef __ANDROID__
+    /* Back acts as Escape in game instead of closing the activity. */
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO
                  | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0)
     {
@@ -458,6 +466,11 @@ int platform_init(int width, int height, int fullscreen, const char *title)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 #ifdef __EMSCRIPTEN__
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
+#elif defined(SONICR_GLES2)
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
