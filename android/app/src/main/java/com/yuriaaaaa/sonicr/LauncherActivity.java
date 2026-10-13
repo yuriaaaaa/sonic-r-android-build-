@@ -37,6 +37,9 @@ public class LauncherActivity extends Activity {
     };
 
     private TextView mText;
+    private Button mRetry;
+    private LinearLayout mMenu;
+    private File mData;
     private static boolean sAskedForAccess = false;
 
     @Override
@@ -55,13 +58,28 @@ public class LauncherActivity extends Activity {
         mText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         root.addView(mText);
 
-        Button retry = new Button(this);
-        retry.setText("Check again");
-        retry.setOnClickListener(v -> check());
+        mRetry = new Button(this);
+        mRetry.setText("Check again");
+        mRetry.setOnClickListener(v -> check());
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         lp.topMargin = dp(16);
-        root.addView(retry, lp);
+        root.addView(mRetry, lp);
+
+        // Shown once the game data is in place.
+        mMenu = new LinearLayout(this);
+        mMenu.setOrientation(LinearLayout.HORIZONTAL);
+        mMenu.setGravity(Gravity.CENTER);
+        mMenu.addView(menuButton("Play", 0xFF2E7D32, v -> play()));
+        mMenu.addView(menuButton("Mods", 0xFF455A64,
+            v -> startActivity(new Intent(this, ModsActivity.class))));
+        mMenu.addView(menuButton("Get mods", 0xFF1565C0,
+            v -> startActivity(new Intent(this, ModBrowserActivity.class))));
+        mMenu.setVisibility(android.view.View.GONE);
+        LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        mp.topMargin = dp(20);
+        root.addView(mMenu, mp);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root);
@@ -72,6 +90,39 @@ public class LauncherActivity extends Activity {
     protected void onResume() {
         super.onResume();
         check();
+    }
+
+    private Button menuButton(String label, int color, android.view.View.OnClickListener click) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(color);
+        bg.setCornerRadius(dp(10));
+        b.setBackground(bg);
+        b.setPadding(dp(28), dp(12), dp(28), dp(12));
+        b.setOnClickListener(click);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(dp(8), 0, dp(8), 0);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private void play() {
+        if (mData == null) {
+            return;
+        }
+        Intent i = new Intent(this, SonicRActivity.class);
+        i.putExtra(SonicRActivity.EXTRA_DATA_DIR, mData.getAbsolutePath());
+        startActivity(i);
+    }
+
+    private void showMenu(boolean ready) {
+        mMenu.setVisibility(ready ? android.view.View.VISIBLE : android.view.View.GONE);
+        mRetry.setVisibility(ready ? android.view.View.GONE : android.view.View.VISIBLE);
     }
 
     private int dp(int v) {
@@ -111,6 +162,7 @@ public class LauncherActivity extends Activity {
     }
 
     private void check() {
+        showMenu(false);
         File shared = sharedFolder();
         File appDir = getExternalFilesDir(null);
 
@@ -171,10 +223,17 @@ public class LauncherActivity extends Activity {
             return;
         }
 
-        Intent i = new Intent(this, SonicRActivity.class);
-        i.putExtra(SonicRActivity.EXTRA_DATA_DIR, data.getAbsolutePath());
-        startActivity(i);
-        finish();
+        mData = data;
+        StringBuilder ready = new StringBuilder("Sonic R is ready.\n\nGame data: " + data.getAbsolutePath());
+        ModManager.init(this);
+        ModManager mods = new ModManager();
+        mods.load();
+        if (!mods.mods.isEmpty())
+            ready.append("\nMods: ").append(mods.enabledCount()).append(" of ").append(mods.mods.size()).append(" on");
+        if (!new File(data, "MUSIC").isDirectory())
+            ready.append("\n\nNo MUSIC folder yet, so races will be silent apart from sound effects.");
+        mText.setText(ready.toString());
+        showMenu(true);
     }
 
     /** Copies assets/<src>/... into dst/..., skipping files that already exist. */

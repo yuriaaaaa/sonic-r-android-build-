@@ -35,5 +35,14 @@ target_compile_options(main PRIVATE
     -Wno-incompatible-pointer-types -Wno-int-conversion
     -Wno-unused-variable -Wno-unused-function -Wno-unused-parameter)
 target_compile_definitions(main PRIVATE
-    SONICR_SDL SONICR_GLES2 SONICR_MATCHMAKER _GNU_SOURCE)
+    SONICR_SDL SONICR_GLES2 SONICR_MATCHMAKER SONICR_MODS _GNU_SOURCE)
 target_link_libraries(main PRIVATE SDL2::SDL2 SDL2_mixer GLESv2 log m)
+
+# libmodarchive: the launcher's mod unpacker (zip, 7z, rar), linking the static
+# xz and libarchive that build.sh prepares in deps/archive-prefix.
+set(ARCHIVE_PREFIX ${DEPS}/archive-prefix)
+add_library(modarchive SHARED ${CMAKE_CURRENT_SOURCE_DIR}/../../modarchive/modarchive.c)
+target_include_directories(modarchive PRIVATE ${DEPS}/libarchive/libarchive)
+target_link_libraries(modarchive PRIVATE
+    ${ARCHIVE_PREFIX}/lib/libarchive.a ${ARCHIVE_PREFIX}/lib/liblzma.a z)
+target_link_options(modarchive PRIVATE -Wl,--no-undefined -Wl,--exclude-libs,ALL)

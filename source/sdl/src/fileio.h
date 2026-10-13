@@ -27,7 +27,12 @@ int    sr_fError(FILE *file);
 #define fWrite(buffer, elementSize, elementCount, file) sr_fWrite((buffer), (elementSize), (elementCount), (file))
 #define fError(file)                                    sr_fError(file)
 #else
+#ifdef SONICR_MODS
+#include "mods.h"
+#define fOpen(path, mode)                               Mods_Open(path, mode)
+#else
 #define fOpen(path, mode)                               fopen(path, mode)
+#endif
 #define fRead(buffer, elementSize, elementCount, file)  fread(buffer, elementSize, elementCount, file)
 #define fSeek(file, offset, whence)                     fseek(file, offset, whence)
 #define fTell(file)                                     ftell(file)

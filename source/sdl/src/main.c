@@ -23,6 +23,9 @@
 #include "net_transport.h"
 #include "net/matchmaker.h"
 #include "net/net_interp.h"
+#ifdef SONICR_MODS
+#include "mods.h"
+#endif
 
 /* Shared keystate from the platform layer */
 extern unsigned char s_keystate[256];
@@ -591,6 +594,10 @@ int main(int argc, char *argv[])
         return 1;
     }
     fclose(probe);
+
+#ifdef SONICR_MODS
+    Mods_Init();
+#endif
 
     /* Save menu settings on any exit (normal, window close, SCREEN_QUIT) */
     atexit(SaveGameSettings);

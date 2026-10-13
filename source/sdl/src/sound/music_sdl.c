@@ -6,6 +6,10 @@
  * matching the original CD track numbering.
  */
 
+#ifdef SONICR_MODS
+#include "../mods.h"
+#include <strings.h>
+#endif
 #include <SDL.h>
 #include <SDL_mixer.h>
 #include <stdio.h>
@@ -115,6 +119,31 @@ static Mix_Music *load_track(int trackNum)
 {
     char path[512];
     SDL_RWops *rw;
+
+#ifdef SONICR_MODS
+    /* A mod's track wins, whatever its format. */
+    if (Mods_FindMusic(trackNum, path, sizeof(path))) {
+        size_t len = strlen(path);
+        const char *ext = len > 4 ? path + len - 4 : "";
+        rw = NULL;
+        if (strcasecmp(ext, ".son") == 0) {
+            rw = MusicRW_OpenSon(path, 44100, 2, 16);
+        }
+        else if (strcasecmp(ext, ".adx") == 0) {
+            rw = MusicRW_OpenAdx(path);
+        }
+        else if (strcasecmp(ext, ".adp") == 0) {
+            rw = MusicRW_OpenAdp(path, 44100, 2);
+        }
+        if (rw) {
+            return Mix_LoadMUS_RW(rw, 1);
+        }
+        Mix_Music *mm = Mix_LoadMUS(path);
+        if (mm) {
+            return mm;
+        }
+    }
+#endif
 
     snprintf(path, sizeof(path), DATA_DIR "/MUSIC/track%d.son", trackNum);
     rw = MusicRW_OpenSon(path, 44100, 2, 16);

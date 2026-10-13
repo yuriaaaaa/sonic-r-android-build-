@@ -21,6 +21,9 @@
 #include "sonicr_functions.h"
 #include "sonicr_paths.h"
 #include "replay_voice.h"
+#ifdef SONICR_MODS
+#include "mods.h"
+#endif
 
 extern void SetAllSoundVolumes(void);        /* 0x4D0760 */
 
@@ -283,7 +286,12 @@ static int LoadWAVIntoSlot(int slot, const char *filename)
     char path[512];
     snprintf(path, sizeof(path), DATA_DIR "/SOUND/SFX/%s", filename);
 
+#ifdef SONICR_MODS
+    const char *modPath = Mods_Resolve(path);
+    Mix_Chunk *chunk = modPath ? Mix_LoadWAV(modPath) : NULL;
+#else
     Mix_Chunk *chunk = Mix_LoadWAV(path);
+#endif
     if (chunk == NULL) {
         DebugLog("SFX: failed to load slot 0x%02X (%s): %s\n", slot, filename, Mix_GetError());
         return 0;

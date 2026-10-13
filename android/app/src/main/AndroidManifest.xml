@@ -34,6 +34,37 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".ModsActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ModBrowserActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ModDetailsActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <!-- GameBanana 1-click install links (sonicrmm:), and mod pages shared to the app. -->
+        <activity android:name=".OneClickActivity"
+            android:exported="true"
+            android:noHistory="true"
+            android:label="Install with Sonic R"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sonicrmm" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <activity android:name=".SonicRActivity"
             android:exported="false"
             android:alwaysRetainTaskState="true"
