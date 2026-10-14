@@ -24,6 +24,8 @@ final class Netplay {
 
     /** {"rooms":[{id,name,players,max,joinable,version}]} or {"error":"..."}; blocks up to 10 s. */
     static native String nativeListRooms(String hub);
+    /** Runs a hub on this phone (TCP 8080, UDP 9000-9001) for the life of the process; null or an error. */
+    static native String nativeStartHub();
     static native void nativeStartHost(String hub, String name, int gamePort);
     static native void nativeStartJoin(String hub, String roomId, int bindPort);
     /** Next session event as JSON ({"type":"status"|"registered"|"peer"|"tunnel"|"proxy"|"error"|"stopped",...}), or null. */

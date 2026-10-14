@@ -314,13 +314,14 @@ public class LauncherActivity extends Activity {
         onlineTitle.setPadding(0, dp(14), 0, dp(4));
         box.addView(onlineTitle);
         TextView online = new TextView(this);
-        online.setText("Race over the internet through a Sonic R netplay hub. Everyone enters the "
-            + "same hub address. One player hosts a room; the others find it and join. In the "
-            + "lobby the host presses Start (or A) to begin once everyone is in.");
+        online.setText("Race over the internet. The host's phone runs the hub: leave the address "
+            + "blank and tap Host a room. Friends enter the host's address and tap Find rooms. "
+            + "In the lobby the host presses Start (or A) to begin once everyone is in. "
+            + "A hub on a PC or server works too: enter its address instead.");
         box.addView(online);
         android.widget.EditText hub = new android.widget.EditText(this);
         hub.setSingleLine(true);
-        hub.setHint("Hub address, e.g. 203.0.113.5 or wss://hub.example.com");
+        hub.setHint("Host's address (blank to host on this phone)");
         hub.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         hub.setText(prefs.getString(KEY_NET_HUB, ""));
         box.addView(hub);
@@ -336,13 +337,16 @@ public class LauncherActivity extends Activity {
         onlineRow.addView(findRooms);
         box.addView(onlineRow);
         hostRoom.setOnClickListener(v -> {
-            String h = saveOnline(prefs, name, hub);
+            String h = saveOnline(prefs, name, hub, true);
             if (h == null) return;
             if (dialog[0] != null) dialog[0].dismiss();
-            hostRoom(h, playerName(prefs));
+            if (isThisPhone(h))
+                confirmLocalHub(playerName(prefs));
+            else
+                hostRoom(h, playerName(prefs), false);
         });
         findRooms.setOnClickListener(v -> {
-            String h = saveOnline(prefs, name, hub);
+            String h = saveOnline(prefs, name, hub, false);
             if (h == null) return;
             if (dialog[0] != null) dialog[0].dismiss();
             findRooms(h);
@@ -377,14 +381,14 @@ public class LauncherActivity extends Activity {
         return n.isEmpty() ? Build.MODEL : n;
     }
 
-    /** Saves the name and hub fields; returns the hub, or null (with a hint) when it's blank. */
+    /** Saves the name and hub fields; returns the hub ("" = this phone, hosting only), or null with a hint. */
     private String saveOnline(android.content.SharedPreferences prefs, android.widget.EditText name,
-                              android.widget.EditText hub) {
+                              android.widget.EditText hub, boolean hosting) {
         String h = hub.getText().toString().trim();
         prefs.edit().putString(KEY_NET_NAME, name.getText().toString().trim())
             .putString(KEY_NET_HUB, h).apply();
-        if (h.isEmpty()) {
-            hub.setError("Enter the hub address first");
+        if (h.isEmpty() && !hosting) {
+            hub.setError("Enter the host's address first");
             return null;
         }
         if (mData == null) {
@@ -399,10 +403,41 @@ public class LauncherActivity extends Activity {
         return h;
     }
 
-    private void hostRoom(String hub, String player) {
+    /** Blank, localhost or one of this phone's own addresses: run the hub here. */
+    private static boolean isThisPhone(String hub) {
+        String h = hub.replaceFirst("^wss?://", "").replaceFirst("[:/].*$", "");
+        if (h.isEmpty() || h.equals("127.0.0.1") || h.equalsIgnoreCase("localhost")) return true;
+        try {
+            for (java.net.NetworkInterface ni : java.util.Collections.list(
+                    java.net.NetworkInterface.getNetworkInterfaces()))
+                for (java.net.InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
+                    if (h.equals(a.getHostAddress())) return true;
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /* Explains what friends enter before the phone starts its own hub. */
+    private void confirmLocalHub(String player) {
+        String addr = localAddresses();
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Host on this phone")
+            .setMessage("This phone runs the hub while you play.\n\n"
+                + "Friends on the same Wi-Fi or your hotspot: they enter " + addr
+                + " and tap Find rooms.\n\n"
+                + "Friends elsewhere: on your home router, forward TCP 8080 and UDP 9000-9001 to "
+                + addr + ", then give them your public IP (search \"what is my IP\"). "
+                + "This doesn't work on mobile data, which blocks incoming connections.")
+            .setPositiveButton("Host", (d, w) -> hostRoom("", player, true))
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void hostRoom(String hub, String player, boolean localHub) {
         Intent i = gameIntent(NetplayActivity.class);
         i.putExtra(NetplayActivity.EXTRA_MODE, "host");
         i.putExtra(NetplayActivity.EXTRA_HUB, hub);
+        i.putExtra(NetplayActivity.EXTRA_LOCAL_HUB, localHub);
         i.putExtra(NetplayActivity.EXTRA_ROOM_NAME, player + "'s room");
         startActivity(i);
     }

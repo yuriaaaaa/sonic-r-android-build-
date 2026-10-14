@@ -83,8 +83,11 @@ touch the screen.
   **Host a room**; the others tap **Find rooms** and pick it. The game opens
   straight into the network lobby, and the host presses Start (or A) to begin
   once everyone is in. Players connect directly where their routers allow it,
-  and through the hub's relay otherwise. Someone has to run the hub: see
-  [netplay-hub.md](netplay-hub.md).
+  and through the hub's relay otherwise. With the hub address left blank,
+  **Host a room** runs the hub on the host's own phone: friends enter that
+  phone's address. Friends outside its network need TCP 8080 and UDP
+  9000-9001 forwarded to it on the router (not possible on mobile data). A
+  hub on a PC or server also works: see [netplay-hub.md](netplay-hub.md).
 
 ## Settings
 

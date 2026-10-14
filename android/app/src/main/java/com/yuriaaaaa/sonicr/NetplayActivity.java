@@ -26,6 +26,7 @@ public class NetplayActivity extends Activity {
     static final String EXTRA_HUB = "netplayHub";
     static final String EXTRA_ROOM = "netplayRoom";   // room id to join
     static final String EXTRA_ROOM_NAME = "netplayRoomName";
+    static final String EXTRA_LOCAL_HUB = "netplayLocalHub";   // host: run the hub on this phone
 
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private TextView mStatus;
@@ -76,6 +77,14 @@ public class NetplayActivity extends Activity {
         if (!Netplay.available()) {
             fail("Online rooms aren't included in this build.");
             return;
+        }
+        if (mHost && getIntent().getBooleanExtra(EXTRA_LOCAL_HUB, false)) {
+            String error = Netplay.nativeStartHub();
+            if (error != null) {
+                fail("This phone couldn't start its hub. " + error);
+                return;
+            }
+            hub = "127.0.0.1";
         }
         if (mHost)
             Netplay.nativeStartHost(hub, roomName, Netplay.GAME_PORT);

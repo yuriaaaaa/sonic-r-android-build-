@@ -248,6 +248,65 @@ pub fn start_join(hub: String, id: String, port: u16) {
         });
 }
 
+static HUB_RUNNING: Mutex<bool> = Mutex::new(false);
+
+/// Runs a hub on this device (TCP 8080, UDP 9000 and 9001), so the host needs
+/// no PC. It lasts as long as the process. Returns an error message, or None.
+pub fn start_hub() -> Option<String> {
+    let mut running = HUB_RUNNING.lock().ok()?;
+    if *running {
+        return None;
+    }
+    let result = runtime().block_on(async {
+        let state = hub::state::AppState::new_dynamic();
+        let punch = tokio::net::UdpSocket::bind("0.0.0.0:9000")
+            .await
+            .map_err(|e| format!("Port 9000 is busy: {e}"))?;
+        drop(punch); // run_punch_listener binds it itself; this only checks it's free
+        let relay = tokio::net::UdpSocket::bind("0.0.0.0:9001")
+            .await
+            .map_err(|e| format!("Port 9001 is busy: {e}"))?;
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
+            .await
+            .map_err(|e| format!("Port 8080 is busy: {e}"))?;
+        tokio::spawn(hub::punch::run_punch_listener(
+            SocketAddr::from(([0, 0, 0, 0], 9000)),
+            state.clone(),
+        ));
+        tokio::spawn(hub::relay::run_relay_listener(relay, state.clone()));
+        let reaper = state.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                tick.tick().await;
+                reaper.reap_stale();
+            }
+        });
+        let app = hub::create_router(state);
+        tokio::spawn(async move {
+            let _ = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await;
+        });
+        Ok::<(), String>(())
+    });
+    match result {
+        Ok(()) => {
+            *running = true;
+            None
+        }
+        Err(e) => Some(e),
+    }
+}
+
+/// Starts the on-device hub; returns null on success or an error message.
+#[no_mangle]
+pub extern "system" fn Java_com_yuriaaaaa_sonicr_Netplay_nativeStartHub(mut env: JNIEnv, _class: JClass) -> jstring {
+    let result = catch_unwind(start_hub).unwrap_or_else(|_| Some("The hub crashed while starting".to_string()));
+    match result {
+        Some(e) => new_string(&mut env, &e),
+        None => std::ptr::null_mut(),
+    }
+}
+
 /// Next queued event as JSON, or null when there is none.
 #[no_mangle]
 pub extern "system" fn Java_com_yuriaaaaa_sonicr_Netplay_nativePollEvent(mut env: JNIEnv, _class: JClass) -> jstring {

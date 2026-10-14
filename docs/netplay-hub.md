@@ -6,6 +6,10 @@ and relays their traffic when a direct connection isn't possible. It's the
 A phone can't run it, because mobile networks don't accept incoming
 connections. Run it on a PC or a cloud server that stays on while you play.
 
+The Android app can also run the hub itself: leave the hub address blank and
+tap **Host a room**. The steps below are for a hub that stays up on its own,
+so rooms can be listed for everyone without the host's phone.
+
 The hub uses three ports:
 
 | Port | Protocol | Used for |

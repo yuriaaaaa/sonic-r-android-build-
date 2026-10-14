@@ -1,5 +1,6 @@
 //! Desktop check of the Android bridge against a real hub:
 //!   e2e host <hub>        registers a room; a fake game answers on 127.0.0.1:5029
+//!   e2e hubhost <hub>     the same, running the hub in-process first (hub = 127.0.0.1)
 //!   e2e join <hub> <id>   joins it and sends a packet through the tunnel
 use std::net::UdpSocket;
 use std::time::{Duration, Instant};
@@ -9,7 +10,11 @@ fn main() {
     let hub = args[2].clone();
     match args[1].as_str() {
         "list" => println!("{}", sonicrnetplay::list_rooms(&hub)),
-        "host" => {
+        "host" | "hubhost" => {
+            if args[1] == "hubhost" {
+                if let Some(e) = sonicrnetplay::start_hub() { panic!("hub: {e}"); }
+                println!("hub started");
+            }
             // Fake game lobby: answers discovery and echoes everything else.
             let game = UdpSocket::bind("127.0.0.1:5029").unwrap();
             std::thread::spawn(move || {
