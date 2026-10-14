@@ -25,7 +25,11 @@ public class HubService extends Service {
     private static final String CHANNEL = "hub";
     private static final int NOTIFICATION_ID = 7847;
 
+    private static final long DUCK_INTERVAL_MS = 5 * 60 * 1000;
+
     private boolean mRunning;
+    private volatile String mDuckStatus = "";
+    private Thread mDuck;
     private PowerManager.WakeLock mWake;
     private WifiManager.WifiLock mWifi;
 
@@ -55,10 +59,66 @@ public class HubService extends Service {
             }
             mRunning = true;
             holdLocks();
+            startDuckDns();
         }
-        goForeground("Rooms are open on " + LauncherActivity.localAddresses()
-            + ". Keep this phone on charge and on Wi-Fi.");
+        showRunning();
         return START_STICKY;
+    }
+
+    private void showRunning() {
+        goForeground("Rooms are open on " + LauncherActivity.localAddresses()
+            + ". Keep this phone on charge and on Wi-Fi." + mDuckStatus);
+    }
+
+    /*
+     * Keeps a DuckDNS name on this network's public IP: DuckDNS records the
+     * address the update comes from. The token never leaves this phone except
+     * to duckdns.org.
+     */
+    private void startDuckDns() {
+        android.content.SharedPreferences prefs = LauncherActivity.prefs(this);
+        String domain = prefs.getString(LauncherActivity.KEY_DUCK_DOMAIN, "").trim()
+            .replaceFirst("^https?://", "").replaceFirst("(?i)\\.duckdns\\.org.*$", "")
+            .replaceFirst("[/:].*$", "");
+        String token = prefs.getString(LauncherActivity.KEY_DUCK_TOKEN, "").trim();
+        if (domain.isEmpty() || token.isEmpty()) return;
+        mDuck = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                String result = duckUpdate(domain, token);
+                mDuckStatus = "\nDuckDNS " + domain + ".duckdns.org: " + result;
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(this::showRunning);
+                try {
+                    Thread.sleep(DUCK_INTERVAL_MS);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }, "duckdns");
+        mDuck.setDaemon(true);
+        mDuck.start();
+    }
+
+    private static String duckUpdate(String domain, String token) {
+        java.net.HttpURLConnection c = null;
+        try {
+            java.net.URL url = new java.net.URL("https://www.duckdns.org/update?domains="
+                + java.net.URLEncoder.encode(domain, "UTF-8") + "&token="
+                + java.net.URLEncoder.encode(token, "UTF-8") + "&ip=");
+            c = (java.net.HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(15000);
+            byte[] buf = new byte[16];
+            int n = c.getInputStream().read(buf);
+            String body = n > 0 ? new String(buf, 0, n, "UTF-8").trim() : "";
+            String time = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT)
+                .format(new java.util.Date());
+            return body.startsWith("OK") ? "updated " + time
+                : "refused (check the name and token)";
+        } catch (Exception e) {
+            return "couldn't reach DuckDNS, will retry";
+        } finally {
+            if (c != null) c.disconnect();
+        }
     }
 
     private void goForeground(String text) {
@@ -102,6 +162,7 @@ public class HubService extends Service {
 
     @Override
     public void onDestroy() {
+        if (mDuck != null) mDuck.interrupt();
         if (mWake != null && mWake.isHeld()) mWake.release();
         if (mWifi != null && mWifi.isHeld()) mWifi.release();
         super.onDestroy();

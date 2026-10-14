@@ -149,6 +149,8 @@ public class LauncherActivity extends Activity {
     static final String KEY_NET_NAME = "netName";
     static final String KEY_NET_HOST = "netHost";   // blank = find a host on the Wi-Fi
     static final String KEY_NET_HUB = "netHub";     // sonic-r-netplay hub for online rooms
+    static final String KEY_DUCK_DOMAIN = "duckDomain";   // Run hub only: DuckDNS name kept on this phone's IP
+    static final String KEY_DUCK_TOKEN = "duckToken";     // its DuckDNS token (stays on this phone)
     static final String KEY_TOUCH_OPACITY = "touchOpacity"; // percent, 20-100
     static final String KEY_TOUCH_PROFILE = "touchProfile"; // active layout, 1-3
     static final int TOUCH_PROFILES = 3;
@@ -314,16 +316,17 @@ public class LauncherActivity extends Activity {
         onlineTitle.setPadding(0, dp(14), 0, dp(4));
         box.addView(onlineTitle);
         TextView online = new TextView(this);
-        online.setText("Race over the internet. The host's phone runs the hub: leave the address "
-            + "blank and tap Host a room. Friends enter the host's address and tap Find rooms. "
+        online.setText("Race over the internet. The address below is the shared hub, so everyone "
+            + "sees the same rooms: tap Host a room, or Find rooms to join one. "
             + "In the lobby the host presses Start (or A) to begin once everyone is in. "
-            + "A hub on a PC or server works too: enter its address instead.");
+            + "To use your own hub, enter its address instead, or clear the box to run "
+            + "one on this phone while you host.");
         box.addView(online);
         android.widget.EditText hub = new android.widget.EditText(this);
         hub.setSingleLine(true);
-        hub.setHint("Host's address (blank to host on this phone)");
+        hub.setHint("Hub address (blank to host on this phone)");
         hub.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        hub.setText(prefs.getString(KEY_NET_HUB, ""));
+        hub.setText(prefs.getString(KEY_NET_HUB, Netplay.DEFAULT_HUB));
         box.addView(hub);
         LinearLayout onlineRow = new LinearLayout(this);
         onlineRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -449,16 +452,44 @@ public class LauncherActivity extends Activity {
             return;
         }
         String addr = localAddresses();
+        android.content.SharedPreferences prefs = prefs(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        box.setPadding(pad, dp(8), pad, 0);
+        TextView how = new TextView(this);
+        how.setText("This phone becomes the server that lists rooms and connects players. "
+            + "It keeps running in the background with a notification; stop it from there.\n\n"
+            + "Players on this Wi-Fi enter " + addr + " as the address.\n\n"
+            + "For players elsewhere, forward TCP 8080 and UDP 9000-9001 on your router to "
+            + addr + " and give them your public IP or DuckDNS name.\n\n"
+            + "Keep the phone on charge and on Wi-Fi, and turn off battery saving for Sonic R "
+            + "(on Xiaomi: App info → Battery saver → No restrictions, and allow Autostart).\n\n"
+            + "Optional: with a DuckDNS name and token, the hub keeps that name pointing at "
+            + "your home's IP.");
+        box.addView(how);
+        android.widget.EditText duckDomain = new android.widget.EditText(this);
+        duckDomain.setSingleLine(true);
+        duckDomain.setHint("DuckDNS name, e.g. sonicr.duckdns.org");
+        duckDomain.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        duckDomain.setText(prefs.getString(KEY_DUCK_DOMAIN, ""));
+        box.addView(duckDomain);
+        android.widget.EditText duckToken = new android.widget.EditText(this);
+        duckToken.setSingleLine(true);
+        duckToken.setHint("DuckDNS token");
+        duckToken.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        duckToken.setText(prefs.getString(KEY_DUCK_TOKEN, ""));
+        box.addView(duckToken);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
         new android.app.AlertDialog.Builder(this)
             .setTitle("Run hub only")
-            .setMessage("This phone becomes the server that lists rooms and connects players. "
-                + "It keeps running in the background with a notification; stop it from there.\n\n"
-                + "Players on this Wi-Fi enter " + addr + " as the address.\n\n"
-                + "For players elsewhere, forward TCP 8080 and UDP 9000-9001 on your router to "
-                + addr + " and give them your public IP (search \"what is my IP\").\n\n"
-                + "Keep the phone on charge and on Wi-Fi, and turn off battery saving for Sonic R "
-                + "(on Xiaomi: App info → Battery saver → No restrictions, and allow Autostart).")
+            .setView(scroll)
             .setPositiveButton("Start hub", (d, w) -> {
+                prefs.edit()
+                    .putString(KEY_DUCK_DOMAIN, duckDomain.getText().toString().trim())
+                    .putString(KEY_DUCK_TOKEN, duckToken.getText().toString().trim())
+                    .apply();
                 if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(
                         android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                     requestPermissions(new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 2);

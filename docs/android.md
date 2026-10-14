@@ -80,7 +80,9 @@ touch the screen.
 - **Online rooms:** races over the internet through a
   [sonic-r-netplay](https://github.com/ZinexDa/sonic-r-netplay) hub, the same
   hub its Windows launcher uses, so phones and PCs can share rooms. Under
-  **Multiplayer**, everyone enters the hub address once. One player taps
+  **Multiplayer**, the hub box starts with the shared hub
+  (`sonicrrecomponline.duckdns.org`), so everyone sees the same rooms; any
+  other hub address can be entered instead. One player taps
   **Host a room**; the others tap **Find rooms** and pick it. The game opens
   straight into the network lobby, and the host presses Start (or A) to begin
   once everyone is in. Players connect directly where their routers allow it,
@@ -92,6 +94,8 @@ touch the screen.
   **Run hub only** turns a spare phone into an always-on hub without racing
   on it: it runs in the background with a notification (Stop hub ends it).
   Keep that phone on charge and Wi-Fi, and exempt Sonic R from battery saving.
+  Given a DuckDNS name and token, it also keeps that name on the network's
+  public IP (updated every 5 minutes; the token stays on that phone).
 
 ## Settings
 

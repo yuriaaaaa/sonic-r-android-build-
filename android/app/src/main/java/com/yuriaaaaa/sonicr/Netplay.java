@@ -7,6 +7,8 @@ package com.yuriaaaaa.sonicr;
  */
 final class Netplay {
     static final int GAME_PORT = 5029;   // same port the netplay desktop launcher uses
+    /** The public hub everyone shares, so all rooms show up in one list. */
+    static final String DEFAULT_HUB = "sonicrrecomponline.duckdns.org";
 
     private static Boolean sLoaded;
 
