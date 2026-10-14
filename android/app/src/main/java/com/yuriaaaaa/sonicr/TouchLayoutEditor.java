@@ -15,6 +15,7 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
+import android.widget.Switch;
 import android.widget.TextView;
 
 /**
@@ -38,6 +39,7 @@ final class TouchLayoutEditor {
     private final TextView mWhat;
     private final SeekBar mSize;
     private final EditText mLabel;
+    private final Switch mShown;
     private final Done mDone;
     private int mPanelPos = 1;   // 0 top, 1 centre, 2 bottom
     private int mProfile;
@@ -64,7 +66,7 @@ final class TouchLayoutEditor {
 
         TextView title = text("Edit touch controls", 18, true);
         mPanel.addView(title);
-        mPanel.addView(text("Drag a control to move it. Tap one to resize or rename it. "
+        mPanel.addView(text("Drag a control to move it. Tap one to resize, rename or hide it (dashed ones are hidden in game; the C button is for mods like Sonic R Heroes). "
             + "Save stores the layout in the chosen profile and uses it.", 13, false));
 
         // Profiles: three saved layouts. Picking one shows it; Save stores the
@@ -121,6 +123,16 @@ final class TouchLayoutEditor {
         });
         mPanel.addView(mLabel);
 
+        mShown = new Switch(activity);
+        mShown.setText("Show in game");
+        mShown.setTextColor(Color.WHITE);
+        mShown.setThumbTintList(gold);
+        mShown.setTrackTintList(ColorStateList.valueOf(0x80FFC21A));
+        mShown.setOnCheckedChangeListener((sw, on) -> {
+            if (!mUpdating) mView.setSelectedShown(on);
+        });
+        mPanel.addView(mShown);
+
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.addView(button("Reset", v -> mView.resetLayout()));
@@ -168,12 +180,16 @@ final class TouchLayoutEditor {
             mSize.setEnabled(false);
             mLabel.setEnabled(false);
             mLabel.setText("");
+            mShown.setEnabled(false);
+            mShown.setChecked(true);
         } else {
             mWhat.setText("Selected: " + b.defLabel);
             mSize.setEnabled(true);
             mSize.setProgress(Math.round((b.fr - MIN_R) / (MAX_R - MIN_R) * 100));
             mLabel.setEnabled(b.hasLabel());
             mLabel.setText(b.hasLabel() ? b.label : "");
+            mShown.setEnabled(b.canHide());
+            mShown.setChecked(b.shown);
         }
         mUpdating = false;
     }

@@ -41,7 +41,15 @@ enabled list in `mods/SonicRModLoader.ini`.
 - **Get mods** browses GameBanana, and GameBanana's 1-click install opens the
   app directly.
 - Textures (`.png`, `.gif`, `.bmp`) replace `.RAW` files; `music/trackN` in
-  any format replaces that track. DLL mods are Windows-only. Codes files are read and known codes (such as "Disable Blinking", used by character model mods) are applied; others are ignored.
+  any format replaces that track.
+- DLL mods are Windows-only, except `SonicR_ColorFix.dll` (Saturn Style
+  Coloring): the engine already draws Saturn-style colours, so it needs no DLL.
+  Its Radiant Emerald translucency isn't included.
+- Codes (`Codes=` in mod.ini, or `Codes.lst`) run every frame in a race:
+  `write`, the `if`/`else`/`endif` comparisons and `ifkbkey`, on the player
+  data. That covers model swaps (Disable Blinking) and Sonic R Heroes'
+  character swap on Z/X/C. Codes that touch other memory, or use pointers,
+  can't run and are listed in the log.
 - The loader logs to `mods/ModLoader-android.log`.
 
 ## Controls
@@ -52,7 +60,9 @@ touch the screen.
 
 - **Three-finger tap** away from the buttons pauses and opens the game menu.
 - **Edit touch controls** (launcher Settings or the game menu): drag controls
-  to move them, and resize or rename the selected one. Layouts save to three
+  to move them, and resize, rename or hide the selected one. A hidden **C**
+  button (for mods like Sonic R Heroes) can be switched on there. L, R and C
+  send Z, X and C. Layouts save to three
   profiles; pick the active one in Settings or the game menu.
 - **Back** asks whether to quit to the launcher.
 

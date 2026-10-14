@@ -147,13 +147,14 @@ final class ModManager {
             else if (key.equalsIgnoreCase("DLLFile")) dll = value;
             else if (key.equalsIgnoreCase("Codes")) codes = value;
         }
-        if (!dll.isEmpty())
+        // DLLs whose effect is already part of this engine, so they need no warning.
+        boolean builtIn = dll.equalsIgnoreCase("SonicR_ColorFix.dll");
+        boolean hasCodes = (!codes.isEmpty() && child(dir, codes) != null) || child(dir, "Codes.lst") != null;
+        if (!dll.isEmpty() && !builtIn)
             mod.notes.add("Has a Windows DLL (" + dll + "), which can't run on Android. Its files still "
                     + "apply, but parts of the mod may be missing.");
-        if ((!codes.isEmpty() && child(dir, codes) != null) || child(dir, "Codes.lst") != null)
-            mod.notes.add("Has codes for the Windows exe. Known ones (like Disable Blinking) are "
-                    + "applied; the rest are ignored here (see mods/ModLoader-android.log).");
-        if (child(dir, "files") == null && dll.isEmpty())
+        // Codes run on Android; any the engine can't run are listed in mods/ModLoader-android.log.
+        if (child(dir, "files") == null && dll.isEmpty() && !hasCodes)
             mod.notes.add("Has no files folder, so it changes nothing.");
         return mod;
     }

@@ -529,6 +529,14 @@ int g_smoothTextures = 0;
 /* --novsync: don't wait for the display refresh on swap (platform_sdl.c). */
 int g_noVsync = 0;
 
+#ifdef SONICR_MODS
+/* Mod codes address the exe's player array; this is the engine's (same layout). */
+unsigned char *Mods_PlayerBytes(void)
+{
+    return (unsigned char *)g_playerBase;
+}
+#endif
+
 /* WinMain @ 0x004CDFC4 — 8254 bytes */
 int main(int argc, char *argv[])
 {
@@ -1396,6 +1404,9 @@ race_start:
         }
 
         UpdateGameLogic();
+#ifdef SONICR_MODS
+        Mods_RunCodes();
+#endif
         g_splashPrevState = g_interlaceMode;
         if (g_netSessionActive == 0 && g_isNetworkGame == 0) {
             UpdatePerPlayerInput();

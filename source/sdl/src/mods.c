@@ -13,14 +13,15 @@
  * .png/.gif/.bmp next to a .RAW texture's path replaces the texture (it is
  * converted to the RAW's own size and cached under mods/.cache).
  *
- * Codes (mod.ini Codes=<file>, or Codes.lst) patch addresses in the original
- * SONICR.EXE, which this engine doesn't have. Known codes are recognised and
- * mapped onto the engine instead (see s_knownCodes); the rest are logged and
- * ignored. DLLFile mods can't load at all.
+ * Codes (mod.ini Codes=<file>, or Codes.lst) address SONICR.EXE memory; the
+ * interpreter below maps them onto the engine (see "Codes"). DLLFile mods
+ * can't load, apart from ones the engine already covers (s_builtInDlls).
  */
 #ifdef SONICR_MODS
 
 #include "mods.h"
+
+#include <SDL.h>
 
 #include <ctype.h>
 #include <dirent.h>
@@ -299,13 +300,27 @@ typedef struct {
     char name[256];
     char codes[256];
     int hasDll;
+    int builtInDll;
 } ModInfo;
 
 /* ---- Codes ----
- * A codes file is a list of blocks:
- *   Code "Disable Blinking" Required
- *   write8 00428CB0 195
- * Each known code is matched by one of its writes (address + value). */
+ * The Windows loader's codes files (same format as the SA Mod Loader's):
+ *
+ *   Code "Character Swap" Required
+ *   ifne8 00502158 30
+ *       ifkbkey 00000000 Z
+ *           write8 007B747A 0
+ *       endif
+ *   endif
+ *
+ * Required codes run once per race frame. Addresses are SONICR.EXE memory,
+ * so they're mapped onto the engine:
+ *   - the player array (0x7B7388, stride 0x71C) maps onto g_playerBase, whose
+ *     struct has the exe's exact layout (player_struct.h asserts it);
+ *   - writes that RET out a known routine (s_knownCodes) set an engine flag;
+ *   - any other address is a scratch byte, so codes that keep their own flags
+ *     in spare memory (Sonic R Heroes uses 0x502158) still work.
+ * A code using anything else (pointers, unknown ops) is skipped and logged. */
 static int s_noBlink;
 
 typedef struct {
@@ -322,47 +337,242 @@ static const KnownCode s_knownCodes[] = {
     { 0x00428D40, 0xC3, &s_noBlink, "disable blinking" },
 };
 
+#define EXE_PLAYER_BASE   0x007B7388u
+#define EXE_PLAYER_STRIDE 0x71Cu
+#define EXE_PLAYER_COUNT  10u
+
+enum { OP_WRITE, OP_ADD, OP_SUB, OP_OR, OP_AND, OP_XOR,
+       OP_IFEQ, OP_IFNE, OP_IFGT, OP_IFGE, OP_IFLT, OP_IFLE, OP_IFMASK, OP_IFKEY,
+       OP_ELSE, OP_ENDIF, OP_NOP };
+
+typedef struct {
+    unsigned char op, size;   /* size in bytes (1, 2, 4) */
+    unsigned addr;
+    unsigned value;
+    int scancode;             /* OP_IFKEY */
+} CodeOp;
+
+static CodeOp *s_ops;
+static int s_opCount, s_opCap;
+
+/* Scratch memory for addresses the engine doesn't have. */
+typedef struct { unsigned addr; unsigned char used, value; } ScratchByte;
+static ScratchByte s_scratch[1024];
+
+static unsigned char *ScratchCell(unsigned addr)
+{
+    unsigned h = (addr * 2654435761u) & 1023u;
+    for (int i = 0; i < 1024; i++, h = (h + 1) & 1023u) {
+        if (!s_scratch[h].used) {
+            s_scratch[h].used = 1;
+            s_scratch[h].addr = addr;
+            s_scratch[h].value = 0;
+            return &s_scratch[h].value;
+        }
+        if (s_scratch[h].addr == addr) {
+            return &s_scratch[h].value;
+        }
+    }
+    static unsigned char sink;
+    return &sink;
+}
+
+extern unsigned char *Mods_PlayerBytes(void);   /* main.c: (unsigned char *)g_playerBase */
+
+static unsigned char *MemByte(unsigned addr)
+{
+    if (addr >= EXE_PLAYER_BASE && addr < EXE_PLAYER_BASE + EXE_PLAYER_STRIDE * EXE_PLAYER_COUNT) {
+        return Mods_PlayerBytes() + (addr - EXE_PLAYER_BASE);
+    }
+    return ScratchCell(addr);
+}
+
+static unsigned MemRead(unsigned addr, int size)
+{
+    unsigned v = 0;
+    for (int i = 0; i < size; i++) {
+        v |= (unsigned)*MemByte(addr + i) << (8 * i);
+    }
+    return v;
+}
+
+static void MemWrite(unsigned addr, int size, unsigned v)
+{
+    for (int i = 0; i < size; i++) {
+        *MemByte(addr + i) = (unsigned char)(v >> (8 * i));
+    }
+}
+
+static int ParseOp(const char *word, CodeOp *op)
+{
+    static const struct { const char *name; int op; } names[] = {
+        { "write", OP_WRITE }, { "add", OP_ADD }, { "sub", OP_SUB }, { "or", OP_OR },
+        { "and", OP_AND }, { "xor", OP_XOR }, { "ifeq", OP_IFEQ }, { "ifne", OP_IFNE },
+        { "ifgt", OP_IFGT }, { "ifge", OP_IFGE }, { "iflt", OP_IFLT }, { "ifle", OP_IFLE },
+        { "ifmask", OP_IFMASK },
+    };
+    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        size_t n = strlen(names[i].name);
+        if (strncasecmp(word, names[i].name, n) != 0) continue;
+        const char *sz = word + n;
+        if (strcmp(sz, "8") == 0) op->size = 1;
+        else if (strcmp(sz, "16") == 0) op->size = 2;
+        else if (strcmp(sz, "32") == 0) op->size = 4;
+        else continue;
+        op->op = (unsigned char)names[i].op;
+        return 1;
+    }
+    return 0;
+}
+
+static int KeyScancode(const char *name)
+{
+    if (strlen(name) == 1) {
+        char k[2] = { (char)toupper((unsigned char)name[0]), 0 };
+        return SDL_GetScancodeFromName(k);
+    }
+    return SDL_GetScancodeFromName(name);
+}
+
+static void AddOp(const CodeOp *op)
+{
+    if (s_opCount == s_opCap) {
+        s_opCap = s_opCap ? s_opCap * 2 : 256;
+        s_ops = realloc(s_ops, (size_t)s_opCap * sizeof(CodeOp));
+    }
+    s_ops[s_opCount++] = *op;
+}
+
+/* Reads one codes file; keeps the Required codes it can run. */
 static void ApplyCodes(const char *path, const char *modName)
 {
     FILE *f = fopen(path, "r");
     if (!f) {
         return;
     }
-    char line[512], code[256] = "";
-    int matched = 0, unknown = 0;
+    char line[512], name[256] = "";
+    int required = 0, ok = 1, depth = 0;
+    int start = s_opCount;       /* first op of the current code */
+    int kept = 0, skipped = 0;
+
+#define FINISH_CODE() do { \
+        if (name[0]) { \
+            if (required && ok && depth == 0) { kept++; \
+                ModLog("   %s: code %s", modName, name); } \
+            else { s_opCount = start; \
+                if (required) { skipped++; ModLog("   %s: code %s can't run on Android, skipped", modName, name); } } \
+        } \
+        start = s_opCount; ok = 1; depth = 0; required = 0; name[0] = '\0'; \
+    } while (0)
+
     while (fgets(line, sizeof(line), f)) {
         char *t = Trim(line);
+        if (!t[0] || t[0] == ';' || (t[0] == '/' && t[1] == '/')) continue;
         if (strncasecmp(t, "Code ", 5) == 0 || strncasecmp(t, "Patch ", 6) == 0) {
-            if (code[0] && !matched) unknown++;
-            snprintf(code, sizeof(code), "%s", t);
-            matched = 0;
+            FINISH_CODE();
+            snprintf(name, sizeof(name), "%s", strchr(t, ' ') + 1);
+            required = strstr(t, "Required") != NULL;
             continue;
         }
-        char op[32];
-        unsigned addr, value;
-        if (sscanf(t, "%31s %x %i", op, &addr, (int *)&value) == 3 && strncasecmp(op, "write", 5) == 0) {
-            for (size_t i = 0; i < sizeof(s_knownCodes) / sizeof(s_knownCodes[0]); i++) {
-                if (s_knownCodes[i].addr == addr && s_knownCodes[i].value == value) {
-                    if (!*s_knownCodes[i].flag) {
-                        ModLog("   %s: code %s -> %s", modName, code, s_knownCodes[i].what);
+        if (!name[0] || !ok) continue;
+
+        char w0[32] = "", w1[64] = "", w2[64] = "";
+        int n = sscanf(t, "%31s %63s %63s", w0, w1, w2);
+        CodeOp op;
+        memset(&op, 0, sizeof(op));
+        if (strcasecmp(w0, "endif") == 0) { op.op = OP_ENDIF; depth--; }
+        else if (strcasecmp(w0, "else") == 0) { op.op = OP_ELSE; }
+        else if (strcasecmp(w0, "ifkbkey") == 0 && n >= 3) {
+            op.op = OP_IFKEY;
+            op.scancode = KeyScancode(w2);
+            if (op.scancode == SDL_SCANCODE_UNKNOWN) ok = 0;
+            depth++;
+        }
+        else if (n >= 3 && ParseOp(w0, &op) && w1[0] != 'p' && w1[0] != 'P') {
+            op.addr = (unsigned)strtoul(w1, NULL, 16);
+            op.value = (unsigned)strtoul(w2, NULL, 0);
+            if (op.op >= OP_IFEQ && op.op <= OP_IFMASK) depth++;
+            if (op.op == OP_WRITE) {
+                for (size_t i = 0; i < sizeof(s_knownCodes) / sizeof(s_knownCodes[0]); i++) {
+                    if (s_knownCodes[i].addr == op.addr && s_knownCodes[i].value == op.value) {
+                        *s_knownCodes[i].flag = 1;
+                        ModLog("   %s: %s", modName, s_knownCodes[i].what);
+                        op.op = OP_NOP;
                     }
-                    *s_knownCodes[i].flag = 1;
-                    matched = 1;
                 }
             }
         }
+        else {
+            ok = 0;    /* an op we can't run: drop the whole code */
+            continue;
+        }
+        AddOp(&op);
     }
-    if (code[0] && !matched) unknown++;
+    FINISH_CODE();
+#undef FINISH_CODE
     fclose(f);
-    if (unknown) {
-        ModLog("   %s: %d code(s) in %s aren't supported on Android and are ignored",
-               modName, unknown, path);
-    }
+    (void)kept; (void)skipped;
 }
 
 int Mods_NoBlink(void)
 {
     return s_noBlink;
+}
+
+static int Test(const CodeOp *op)
+{
+    if (op->op == OP_IFKEY) {
+        const Uint8 *keys = SDL_GetKeyboardState(NULL);
+        return keys && op->scancode > 0 && keys[op->scancode];
+    }
+    unsigned v = MemRead(op->addr, op->size);
+    switch (op->op) {
+        case OP_IFEQ: return v == op->value;
+        case OP_IFNE: return v != op->value;
+        case OP_IFGT: return v > op->value;
+        case OP_IFGE: return v >= op->value;
+        case OP_IFLT: return v < op->value;
+        case OP_IFLE: return v <= op->value;
+        case OP_IFMASK: return (v & op->value) == op->value;
+    }
+    return 0;
+}
+
+void Mods_RunCodes(void)
+{
+    if (s_opCount == 0 || Mods_PlayerBytes() == NULL) {
+        return;
+    }
+    /* skip > 0: inside that many false (or already-taken) branches. */
+    int skip = 0;
+    for (int i = 0; i < s_opCount; i++) {
+        const CodeOp *op = &s_ops[i];
+        if (op->op == OP_ENDIF) {
+            if (skip > 0) skip--;
+            continue;
+        }
+        if (op->op == OP_ELSE) {
+            if (skip == 1) skip = 0;          /* the if was false: run the else */
+            else if (skip == 0) skip = 1;     /* the if ran: skip the else */
+            continue;
+        }
+        if (op->op >= OP_IFEQ && op->op <= OP_IFKEY) {
+            if (skip > 0 || !Test(op)) skip++;
+            continue;
+        }
+        if (skip > 0 || op->op == OP_NOP) continue;
+        unsigned mask = op->size == 4 ? 0xFFFFFFFFu : (1u << (8 * op->size)) - 1u;
+        unsigned v = MemRead(op->addr, op->size);
+        switch (op->op) {
+            case OP_WRITE: v = op->value; break;
+            case OP_ADD: v += op->value; break;
+            case OP_SUB: v -= op->value; break;
+            case OP_OR:  v |= op->value; break;
+            case OP_AND: v &= op->value; break;
+            case OP_XOR: v ^= op->value; break;
+        }
+        MemWrite(op->addr, op->size, v & mask);
+    }
 }
 
 static void ModIniFn(void *ctx, const char *group, const char *key, const char *value)
@@ -373,7 +583,14 @@ static void ModIniFn(void *ctx, const char *group, const char *key, const char *
             snprintf(info->name, sizeof(info->name), "%s", value);
         }
         else if (strcasecmp(key, "DLLFile") == 0 && value[0]) {
-            info->hasDll = 1;
+            if (strcasecmp(value, "SonicR_ColorFix.dll") == 0) {
+                /* Saturn-style vertex colouring (D3D ADDSIGNED for the track
+                 * and characters) is how this engine renders already. */
+                info->builtInDll = 1;
+            }
+            else {
+                info->hasDll = 1;
+            }
         }
         else if (strcasecmp(key, "Codes") == 0 && value[0]) {
             snprintf(info->codes, sizeof(info->codes), "%s", value);
@@ -483,7 +700,8 @@ void Mods_Init(void)
         }
 
         ModLog("%d. %s: %d files%s", n, info.name, files,
-               info.hasDll ? " (its DLL can't load on Android)" : "");
+               info.hasDll ? " (its DLL can't load on Android)"
+               : info.builtInDll ? " (what its DLL does is built into this engine)" : "");
         char codes[640];
         if ((info.codes[0] && FindChild(modDir, info.codes, codes, sizeof(codes)))
                 || FindChild(modDir, "Codes.lst", codes, sizeof(codes))) {

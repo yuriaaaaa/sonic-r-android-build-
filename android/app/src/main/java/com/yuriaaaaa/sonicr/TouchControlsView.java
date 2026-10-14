@@ -38,16 +38,24 @@ public class TouchControlsView extends View {
         final String defLabel;
         final int key;
         final float defX, defY, defR;
+        final boolean defShown;
         String label;
+        boolean shown;            // hidden buttons are skipped in game but still editable
         float fx, fy, fr;         // centre as fractions of width/height, radius as a fraction of height
         float cx, cy, r;
         Btn(String id, String label, int key, float fx, float fy, float fr) {
+            this(id, label, key, fx, fy, fr, true);
+        }
+        Btn(String id, String label, int key, float fx, float fy, float fr, boolean shown) {
             this.id = id; this.defLabel = label; this.key = key;
-            this.defX = fx; this.defY = fy; this.defR = fr;
+            this.defX = fx; this.defY = fy; this.defR = fr; this.defShown = shown;
             reset();
         }
         void reset() {
-            label = defLabel; fx = defX; fy = defY; fr = defR;
+            label = defLabel; fx = defX; fy = defY; fr = defR; shown = defShown;
+        }
+        boolean canHide() {
+            return key != 0;
         }
         boolean hasLabel() {
             return key != 0;
@@ -62,6 +70,8 @@ public class TouchControlsView extends View {
         new Btn("R",     "R",     KeyEvent.KEYCODE_X,      0.925f, 0.22f, 0.080f),
         new Btn("Back",  "Back",  KeyEvent.KEYCODE_ESCAPE, 0.390f, 0.09f, 0.060f),
         new Btn("Start", "Start", KeyEvent.KEYCODE_ENTER,  0.610f, 0.09f, 0.060f),
+        // C key: used by mods such as Sonic R Heroes (Z/X/C character swap). Off by default.
+        new Btn("C",     "C",     KeyEvent.KEYCODE_C,      0.925f, 0.38f, 0.065f, false),
     };
     // D-pad: fx < 0 means "default", placed from the left edge for the screen's aspect.
     private final Btn mPad = new Btn("DPad", "D-pad", 0, -1f, 0.70f, 0.21f);
@@ -138,12 +148,13 @@ public class TouchControlsView extends View {
         return out;
     }
 
-    /** "id,fx,fy,fr,label;..." — labels have ',' and ';' removed. */
+    /** "id,fx,fy,fr,label,shown;..." — labels have ',' and ';' removed. */
     String saveLayout() {
         StringBuilder sb = new StringBuilder();
         for (Btn b : all()) {
             sb.append(b.id).append(',').append(b.fx).append(',').append(b.fy).append(',')
-              .append(b.fr).append(',').append(b.label.replace(",", "").replace(";", "")).append(';');
+              .append(b.fr).append(',').append(b.label.replace(",", "").replace(";", ""))
+              .append(',').append(b.shown ? 1 : 0).append(';');
         }
         return sb.toString();
     }
@@ -152,7 +163,7 @@ public class TouchControlsView extends View {
         for (Btn b : all()) b.reset();
         if (s == null || s.isEmpty()) return;
         for (String entry : s.split(";")) {
-            String[] f = entry.split(",", 5);
+            String[] f = entry.split(",", 6);
             if (f.length < 4) continue;
             for (Btn b : all()) {
                 if (!b.id.equals(f[0])) continue;
@@ -163,7 +174,8 @@ public class TouchControlsView extends View {
                 } catch (NumberFormatException ignored) {
                     b.reset();
                 }
-                if (f.length == 5 && b.hasLabel() && !f[4].trim().isEmpty()) b.label = f[4];
+                if (f.length >= 5 && b.hasLabel() && !f[4].trim().isEmpty()) b.label = f[4];
+                if (f.length >= 6 && b.canHide()) b.shown = !"0".equals(f[5].trim());
             }
         }
     }
@@ -192,6 +204,12 @@ public class TouchControlsView extends View {
     void setSelectedLabel(String label) {
         if (mSelected == null || !mSelected.hasLabel()) return;
         mSelected.label = label.isEmpty() ? mSelected.defLabel : label;
+        invalidate();
+    }
+
+    void setSelectedShown(boolean shown) {
+        if (mSelected == null || !mSelected.canHide()) return;
+        mSelected.shown = shown;
         invalidate();
     }
 
@@ -282,10 +300,19 @@ public class TouchControlsView extends View {
         drawArrow(c, KeyEvent.KEYCODE_DPAD_DOWN, 0, 1);
 
         for (Btn b : mButtons) {
+            if (!b.shown && !mEditing) continue;
             boolean down = mHeld.contains(b.key);
-            mFill.setColor(down ? Color.argb(190, 60, 60, 60) : Color.argb(130, 0, 0, 0));
+            mFill.setColor(down ? Color.argb(190, 60, 60, 60) : Color.argb(b.shown ? 130 : 50, 0, 0, 0));
             c.drawCircle(b.cx, b.cy, b.r, mFill);
-            c.drawCircle(b.cx, b.cy, b.r, mStroke);
+            if (b.shown) {
+                c.drawCircle(b.cx, b.cy, b.r, mStroke);
+            } else {
+                // Hidden in game: dashed outline in the editor.
+                Paint dash = new Paint(mStroke);
+                dash.setPathEffect(new android.graphics.DashPathEffect(new float[] { b.r * 0.25f, b.r * 0.2f }, 0));
+                dash.setColor(Color.argb(110, 255, 255, 255));
+                c.drawCircle(b.cx, b.cy, b.r, dash);
+            }
             float size = mText.getTextSize();
             mText.setTextSize(Math.min(size, b.r * 0.9f));
             c.drawText(b.label, b.cx, b.cy - (mText.descent() + mText.ascent()) / 2, mText);
@@ -320,7 +347,7 @@ public class TouchControlsView extends View {
 
     private int hitButton(float x, float y) {
         for (int i = 0; i < mButtons.length; i++) {
-            if (inside(mButtons[i], x, y, 1.25f)) return i;
+            if (mButtons[i].shown && inside(mButtons[i], x, y, 1.25f)) return i;
         }
         return NONE;
     }
