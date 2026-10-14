@@ -172,9 +172,13 @@ public class SonicRActivity extends SDLActivity {
 
         android.widget.TextView opacityLabel = new android.widget.TextView(ui);
         opacityLabel.setPadding(0, (int) (8 * d), 0, 0);
+        opacityLabel.setTextColor(android.graphics.Color.WHITE);
         box.addView(opacityLabel);
         android.widget.SeekBar opacity = new android.widget.SeekBar(ui);
         opacity.setMax(80);   // 20% to 100%
+        opacity.setProgressTintList(android.content.res.ColorStateList.valueOf(MENU_GOLD));
+        opacity.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x60FFFFFF));
+        opacity.setThumbTintList(android.content.res.ColorStateList.valueOf(MENU_GOLD));
         int current = prefs.getInt(LauncherActivity.KEY_TOUCH_OPACITY, 100);
         opacity.setProgress(current - 20);
         opacityLabel.setText("Touch opacity: " + current + "%");
@@ -194,6 +198,7 @@ public class SonicRActivity extends SDLActivity {
         android.widget.TextView resLabel = new android.widget.TextView(ui);
         resLabel.setText("Resolution");
         resLabel.setPadding(0, (int) (8 * d), 0, 0);
+        resLabel.setTextColor(android.graphics.Color.WHITE);
         box.addView(resLabel);
         final int[] heights = { 0, 1080, 720, 480 };
         final String[] resNames = { "Native", "1080p", "720p", "480p" };
@@ -204,6 +209,8 @@ public class SonicRActivity extends SDLActivity {
             android.widget.RadioButton rb = new android.widget.RadioButton(ui);
             rb.setId(i + 1);
             rb.setText(resNames[i]);
+            rb.setTextColor(android.graphics.Color.WHITE);
+            rb.setButtonTintList(checkedTint(MENU_GOLD, 0xB0FFFFFF));
             res.addView(rb);
             if (heights[i] == resNow) {
                 res.check(i + 1);
@@ -238,12 +245,12 @@ public class SonicRActivity extends SDLActivity {
         android.widget.TextView note = new android.widget.TextView(ui);
         note.setText("Anti-aliasing needs a restart, so it's only in the launcher's Settings.");
         note.setPadding(0, (int) (10 * d), 0, 0);
+        note.setTextColor(0xD0FFFFFF);
         box.addView(note);
 
         android.widget.ScrollView scroll = new android.widget.ScrollView(ui);
         scroll.addView(box);
         mMenuDialog = new AlertDialog.Builder(this, MENU_THEME)
-            .setTitle("Game menu")
             .setView(scroll)
             .setOnCancelListener(dlg -> setGamePaused(false))
             .setPositiveButton("Resume", (dlg, w) -> setGamePaused(false))
@@ -252,10 +259,51 @@ public class SonicRActivity extends SDLActivity {
                 askToQuit();
             })
             .create();
+        styleDialog(mMenuDialog, "Game menu");
         showImmersive(mMenuDialog);
     }
 
     private static final int MENU_THEME = android.R.style.Theme_DeviceDefault_Dialog_Alert;
+    private static final int MENU_BLUE = 0xFF0A3CE6;   // electric blue
+    private static final int MENU_GOLD = 0xFFFFC21A;   // yellowy gold
+    private static final int MENU_GOLD_DIM = 0x80FFC21A;
+    private static final int MENU_OFF = 0xFFB8C4E8;    // switch thumb when off
+
+    private static android.content.res.ColorStateList checkedTint(int on, int off) {
+        return new android.content.res.ColorStateList(
+            new int[][] { { android.R.attr.state_checked }, { } }, new int[] { on, off });
+    }
+
+    /* Electric blue panel, gold ring, white text and buttons. */
+    private void styleDialog(AlertDialog dialog, String title) {
+        float d = getResources().getDisplayMetrics().density;
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(MENU_BLUE);
+        bg.setCornerRadius(22 * d);
+        bg.setStroke((int) (4 * d), MENU_GOLD);
+        android.widget.TextView t = new android.widget.TextView(this);
+        t.setText(title);
+        t.setTextColor(android.graphics.Color.WHITE);
+        t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 22);
+        t.setTypeface(null, android.graphics.Typeface.BOLD);
+        t.setPadding((int) (24 * d), (int) (18 * d), (int) (24 * d), (int) (4 * d));
+        dialog.setCustomTitle(t);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(bg);
+        }
+        dialog.setOnShowListener(x -> {
+            for (int which : new int[] { AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE }) {
+                android.widget.Button b = dialog.getButton(which);
+                if (b != null) {
+                    b.setTextColor(android.graphics.Color.WHITE);
+                }
+            }
+            android.widget.TextView msg = dialog.findViewById(android.R.id.message);
+            if (msg != null) {
+                msg.setTextColor(android.graphics.Color.WHITE);
+            }
+        });
+    }
 
     private android.widget.Switch menuSwitch(android.content.Context ui, String label, boolean on,
                                              java.util.function.Consumer<Boolean> change) {
@@ -265,6 +313,9 @@ public class SonicRActivity extends SDLActivity {
         sw.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
         int pad = (int) (6 * getResources().getDisplayMetrics().density);
         sw.setPadding(0, pad, 0, pad);
+        sw.setTextColor(android.graphics.Color.WHITE);
+        sw.setThumbTintList(checkedTint(MENU_GOLD, MENU_OFF));
+        sw.setTrackTintList(checkedTint(MENU_GOLD_DIM, 0x60FFFFFF));
         sw.setOnCheckedChangeListener((b, v) -> change.accept(v));
         return sw;
     }
@@ -314,13 +365,13 @@ public class SonicRActivity extends SDLActivity {
         }
         setGamePaused(true);
         mQuitDialog = new AlertDialog.Builder(this, MENU_THEME)
-            .setTitle("Quit Sonic R?")
             .setMessage("Are you sure you want to quit? Any unsaved progress will be lost.")
             .setCancelable(true)
             .setOnCancelListener(d -> setGamePaused(false))
             .setPositiveButton("Continue", (d, w) -> setGamePaused(false))
             .setNegativeButton("Exit game", (d, w) -> exitToLauncher())
             .create();
+        styleDialog(mQuitDialog, "Quit Sonic R?");
         showImmersive(mQuitDialog);
     }
 
