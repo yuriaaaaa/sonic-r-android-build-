@@ -1,6 +1,7 @@
 # Sonic R on Android
 
-An arm64 Android build of the engine, with a launcher for the game data,
+An Android build of the engine (64-bit arm64, plus 32-bit armv7 for phones
+such as the Redmi 9A that run a 32-bit Android), with a launcher for the game data,
 mods and settings. Releases are source-only: build the APK yourself and use
 game data from your own copy of Sonic R.
 
@@ -88,6 +89,9 @@ touch the screen.
   phone's address. Friends outside its network need TCP 8080 and UDP
   9000-9001 forwarded to it on the router (not possible on mobile data). A
   hub on a PC or server also works: see [netplay-hub.md](netplay-hub.md).
+  **Run hub only** turns a spare phone into an always-on hub without racing
+  on it: it runs in the background with a notification (Stop hub ends it).
+  Keep that phone on charge and Wi-Fi, and exempt Sonic R from battery saving.
 
 ## Settings
 

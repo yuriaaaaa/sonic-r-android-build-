@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds the Sonic R Android APK (arm64). Needs JDK 17+, the Android SDK with
-# NDK 27.2.12479018 and CMake 3.22.1, and network access for the SDL sources.
+# Builds the Sonic R Android APK (arm64-v8a and 32-bit armeabi-v7a). Needs
+# JDK 17+, the Android SDK with NDK 27.2.12479018 and CMake 3.22.1, and network
+# access for the SDL sources.
 #   ANDROID_HOME=/path/to/sdk ./build.sh
 # Output: app/build/outputs/apk/release/app-release.apk
 set -euo pipefail
@@ -47,19 +48,23 @@ fetch libarchive "$LIBARCHIVE_VERSION" \
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$(sed -n 's/^sdk.dir=//p' local.properties 2>/dev/null)}}"
 NDK="$SDK/ndk/27.2.12479018"
 CMAKE_BIN="$SDK/cmake/3.22.1/bin"
-PREFIX="$(pwd)/deps/archive-prefix"
+# Both ABIs: arm64-v8a for current phones, armeabi-v7a for phones that run a
+# 32-bit Android (for example the Redmi 9A and 9AT).
+ABIS=(arm64-v8a armeabi-v7a)
+for ABI in "${ABIS[@]}"; do
+PREFIX="$(pwd)/deps/archive-prefix/$ABI"
 if [ ! -f "$PREFIX/lib/libarchive.a" ]; then
-    echo "Building xz and libarchive"
+    echo "Building xz and libarchive ($ABI)"
     ANDROID_CMAKE=(-G Ninja -DCMAKE_MAKE_PROGRAM="$CMAKE_BIN/ninja"
         -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake"
-        -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release
+        -DANDROID_ABI="$ABI" -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$PREFIX")
-    "$CMAKE_BIN/cmake" -S deps/xz -B deps/xz-build "${ANDROID_CMAKE[@]}" \
+    "$CMAKE_BIN/cmake" -S deps/xz -B "deps/xz-build-$ABI" "${ANDROID_CMAKE[@]}" \
         -DBUILD_SHARED_LIBS=OFF -DXZ_TOOL_XZ=OFF -DXZ_TOOL_XZDEC=OFF -DXZ_TOOL_LZMADEC=OFF \
         -DXZ_TOOL_LZMAINFO=OFF -DXZ_TOOL_SCRIPTS=OFF -DXZ_TOOL_SYMLINKS=OFF \
         -DXZ_TOOL_SYMLINKS_LZMA=OFF -DXZ_DOC=OFF -DXZ_NLS=OFF -DBUILD_TESTING=OFF
-    "$CMAKE_BIN/ninja" -C deps/xz-build install
-    "$CMAKE_BIN/cmake" -S deps/libarchive -B deps/libarchive-build "${ANDROID_CMAKE[@]}" \
+    "$CMAKE_BIN/ninja" -C "deps/xz-build-$ABI" install
+    "$CMAKE_BIN/cmake" -S deps/libarchive -B "deps/libarchive-build-$ABI" "${ANDROID_CMAKE[@]}" \
         -DBUILD_SHARED_LIBS=OFF -DCMAKE_PREFIX_PATH="$PREFIX" \
         -DLIBLZMA_INCLUDE_DIR="$PREFIX/include" -DLIBLZMA_LIBRARY="$PREFIX/lib/liblzma.a" \
         -DENABLE_LZMA=ON -DENABLE_ZLIB=ON -DENABLE_BZip2=OFF -DENABLE_LZ4=OFF -DENABLE_ZSTD=OFF \
@@ -68,28 +73,34 @@ if [ ! -f "$PREFIX/lib/libarchive.a" ]; then
         -DENABLE_LIBGCC=OFF -DENABLE_CNG=OFF -DENABLE_TAR=OFF -DENABLE_CPIO=OFF -DENABLE_CAT=OFF \
         -DENABLE_UNZIP=OFF -DENABLE_XATTR=OFF -DENABLE_ACL=OFF -DENABLE_ICONV=OFF -DENABLE_TEST=OFF \
         -DENABLE_INSTALL=ON -DENABLE_WERROR=OFF
-    "$CMAKE_BIN/ninja" -C deps/libarchive-build archive_static
-    cp deps/libarchive-build/libarchive/libarchive.a "$PREFIX/lib/"
+    "$CMAKE_BIN/ninja" -C "deps/libarchive-build-$ABI" archive_static
+    cp "deps/libarchive-build-$ABI/libarchive/libarchive.a" "$PREFIX/lib/"
 fi
+done
 
 # Online rooms: sonic-r-netplay's sidecar as libsonicrnetplay.so (Rust). Needs
-# rustup's aarch64-linux-android target; without it the APK builds with online
-# rooms switched off.
-NETPLAY_OUT="netplay/out/jniLibs/arm64-v8a"
-if command -v cargo >/dev/null && rustup target list --installed 2>/dev/null | grep -q aarch64-linux-android; then
-    echo "Building the netplay library"
-    TOOLS="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+# rustup's aarch64-linux-android and armv7-linux-androideabi targets; without
+# them the APK builds with online rooms switched off.
+TOOLS="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+netplay_lib() {   # abi rust-target clang-prefix
+    local env_target
+    env_target="$(echo "$2" | tr 'a-z-' 'A-Z_')"
+    if ! command -v cargo >/dev/null || ! rustup target list --installed 2>/dev/null | grep -qx "$2"; then
+        echo "cargo or the $2 Rust target is missing; $1 builds without online rooms" >&2
+        return
+    fi
+    echo "Building the netplay library ($1)"
     (cd netplay &&
-        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLS/aarch64-linux-android24-clang" \
-        CC_aarch64_linux_android="$TOOLS/aarch64-linux-android24-clang" \
-        AR_aarch64_linux_android="$TOOLS/llvm-ar" \
-        CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384" \
-        cargo build --release --locked --target aarch64-linux-android --lib)
-    mkdir -p "$NETPLAY_OUT"
-    cp netplay/target/aarch64-linux-android/release/libsonicrnetplay.so "$NETPLAY_OUT/"
-else
-    echo "cargo or the aarch64-linux-android Rust target is missing; building without online rooms" >&2
-fi
+        env "CARGO_TARGET_${env_target}_LINKER=$TOOLS/$3-clang" \
+            "CC_${2//-/_}=$TOOLS/$3-clang" \
+            "AR_${2//-/_}=$TOOLS/llvm-ar" \
+            "CARGO_TARGET_${env_target}_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384" \
+            cargo build --release --locked --target "$2" --lib)
+    mkdir -p "netplay/out/jniLibs/$1"
+    cp "netplay/target/$2/release/libsonicrnetplay.so" "netplay/out/jniLibs/$1/"
+}
+netplay_lib arm64-v8a aarch64-linux-android aarch64-linux-android24
+netplay_lib armeabi-v7a armv7-linux-androideabi armv7a-linux-androideabi24
 
 # The Java side of SDL (app/src/main/java/org/libsdl/app) is copied from
 # SDL $SDL2_VERSION; re-copy it from deps/SDL2/android-project when bumping.

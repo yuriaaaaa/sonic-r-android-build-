@@ -32,5 +32,14 @@ final class Netplay {
     static native String nativePollEvent();
     static native void nativeStop();
 
+    /** True when a hub on this phone (for example HubService) answers on 127.0.0.1. */
+    static boolean localHubAnswers() {
+        try {
+            return !new org.json.JSONObject(nativeListRooms("127.0.0.1")).has("error");
+        } catch (org.json.JSONException e) {
+            return false;
+        }
+    }
+
     private Netplay() { }
 }

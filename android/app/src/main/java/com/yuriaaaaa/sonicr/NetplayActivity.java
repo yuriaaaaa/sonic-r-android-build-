@@ -80,6 +80,9 @@ public class NetplayActivity extends Activity {
         }
         if (mHost && getIntent().getBooleanExtra(EXTRA_LOCAL_HUB, false)) {
             String error = Netplay.nativeStartHub();
+            // The hub may already be running here as "Run hub only" (HubService).
+            if (error != null && Netplay.localHubAnswers())
+                error = null;
             if (error != null) {
                 fail("This phone couldn't start its hub. " + error);
                 return;

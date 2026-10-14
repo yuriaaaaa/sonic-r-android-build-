@@ -39,8 +39,8 @@ target_compile_definitions(main PRIVATE
 target_link_libraries(main PRIVATE SDL2::SDL2 SDL2_mixer GLESv2 log m)
 
 # libmodarchive: the launcher's mod unpacker (zip, 7z, rar), linking the static
-# xz and libarchive that build.sh prepares in deps/archive-prefix.
-set(ARCHIVE_PREFIX ${DEPS}/archive-prefix)
+# xz and libarchive that build.sh prepares in deps/archive-prefix/<abi>.
+set(ARCHIVE_PREFIX ${DEPS}/archive-prefix/${ANDROID_ABI})
 add_library(modarchive SHARED ${CMAKE_CURRENT_SOURCE_DIR}/../../modarchive/modarchive.c)
 target_include_directories(modarchive PRIVATE ${DEPS}/libarchive/libarchive)
 target_link_libraries(modarchive PRIVATE

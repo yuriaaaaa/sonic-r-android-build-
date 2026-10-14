@@ -336,6 +336,14 @@ public class LauncherActivity extends Activity {
         onlineRow.addView(hostRoom);
         onlineRow.addView(findRooms);
         box.addView(onlineRow);
+        android.widget.Button hubOnly = new android.widget.Button(this);
+        hubOnly.setText("Run hub only (spare phone as server)");
+        hubOnly.setAllCaps(false);
+        box.addView(hubOnly);
+        hubOnly.setOnClickListener(v -> {
+            if (dialog[0] != null) dialog[0].dismiss();
+            confirmHubOnly();
+        });
         hostRoom.setOnClickListener(v -> {
             String h = saveOnline(prefs, name, hub, true);
             if (h == null) return;
@@ -433,6 +441,35 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
+    /* Starts HubService: this phone serves rooms for everyone without racing itself. */
+    private void confirmHubOnly() {
+        if (!Netplay.available()) {
+            android.widget.Toast.makeText(this, "Online rooms aren't included in this build",
+                android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        String addr = localAddresses();
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Run hub only")
+            .setMessage("This phone becomes the server that lists rooms and connects players. "
+                + "It keeps running in the background with a notification; stop it from there.\n\n"
+                + "Players on this Wi-Fi enter " + addr + " as the address.\n\n"
+                + "For players elsewhere, forward TCP 8080 and UDP 9000-9001 on your router to "
+                + addr + " and give them your public IP (search \"what is my IP\").\n\n"
+                + "Keep the phone on charge and on Wi-Fi, and turn off battery saving for Sonic R "
+                + "(on Xiaomi: App info → Battery saver → No restrictions, and allow Autostart).")
+            .setPositiveButton("Start hub", (d, w) -> {
+                if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(
+                        android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 2);
+                HubService.start(this);
+                android.widget.Toast.makeText(this, "Starting the hub; see the notification",
+                    android.widget.Toast.LENGTH_LONG).show();
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
     private void hostRoom(String hub, String player, boolean localHub) {
         Intent i = gameIntent(NetplayActivity.class);
         i.putExtra(NetplayActivity.EXTRA_MODE, "host");
@@ -517,7 +554,7 @@ public class LauncherActivity extends Activity {
         return b.length == 4 && (b[0] & 0xFF) == 100 && (b[1] & 0xC0) == 64;
     }
 
-    private static String localAddresses() {
+    static String localAddresses() {
         StringBuilder sb = new StringBuilder();
         try {
             for (java.net.NetworkInterface ni : java.util.Collections.list(
