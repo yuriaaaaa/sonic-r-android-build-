@@ -448,6 +448,9 @@ int platform_init(int width, int height, int fullscreen, const char *title)
 #ifdef __ANDROID__
     /* Back acts as Escape in game instead of closing the activity. */
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    /* The phone's tilt sensor otherwise shows up as a joystick and takes a
+     * player slot. */
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO
