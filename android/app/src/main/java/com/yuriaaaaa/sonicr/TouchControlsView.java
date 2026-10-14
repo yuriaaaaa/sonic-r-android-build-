@@ -21,7 +21,8 @@ import java.util.Set;
  *   D-pad = arrows, A = accelerate, Jump = Space, L/R = Z/X sharp turns,
  *   Look = 1 (look back), Start = Enter, Back = Escape.
  * The top-centre button hides them; a connected controller hides them until
- * the screen is touched again.
+ * the screen is touched again. Whenever they aren't in use (hidden, switched
+ * off, or a controller is playing), a two-finger tap opens the game menu.
  */
 public class TouchControlsView extends View {
 
@@ -58,6 +59,9 @@ public class TouchControlsView extends View {
 
     private boolean mHidden;           // hidden with the hide button
     private boolean mGamepadHidden;    // hidden because a controller is in use
+    private boolean mDisabled;         // switched off in settings
+    private boolean mMenuGesture;      // swallowing a two-finger tap until all fingers lift
+    private Runnable mOnMenu;
 
     private final Paint mFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -72,6 +76,16 @@ public class TouchControlsView extends View {
         mText.setTextAlign(Paint.Align.CENTER);
         mPrefs = ctx.getSharedPreferences("touch", Context.MODE_PRIVATE);
         mHidden = mPrefs.getBoolean("hidden", false);
+    }
+
+    void setOnMenu(Runnable onMenu) {
+        mOnMenu = onMenu;
+    }
+
+    void setEnabledControls(boolean enabled) {
+        mDisabled = !enabled;
+        releaseAll();
+        invalidate();
     }
 
     void hideForGamepad() {
@@ -102,7 +116,7 @@ public class TouchControlsView extends View {
     @Override
     protected void onDraw(Canvas c) {
         boolean visible = !mHidden && !mGamepadHidden;
-        if (mGamepadHidden) {
+        if (mGamepadHidden || mDisabled) {
             return;
         }
 
@@ -163,16 +177,37 @@ public class TouchControlsView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
+        int idx = e.getActionIndex();
+
+        // Two-finger tap opens the game menu while the controls aren't in use.
+        boolean inactive = mDisabled || mGamepadHidden || mHidden;
+        if (action == MotionEvent.ACTION_DOWN) {
+            mMenuGesture = false;
+        }
+        if (inactive && action == MotionEvent.ACTION_POINTER_DOWN && e.getPointerCount() == 2) {
+            mMenuGesture = true;
+            if (mOnMenu != null) {
+                performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                mOnMenu.run();
+            }
+            return true;
+        }
+        if (mMenuGesture) {
+            return true;
+        }
+        if (mDisabled) {
+            return true;
+        }
 
         if (mGamepadHidden) {
-            if (action == MotionEvent.ACTION_DOWN) {
+            // A single tap (not a two-finger one) brings the controls back.
+            if (action == MotionEvent.ACTION_UP) {
                 mGamepadHidden = false;
                 invalidate();
             }
             return true;
         }
 
-        int idx = e.getActionIndex();
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
             float x = e.getX(idx), y = e.getY(idx);
             if (inside(mHide, x, y, 1.4f)) {

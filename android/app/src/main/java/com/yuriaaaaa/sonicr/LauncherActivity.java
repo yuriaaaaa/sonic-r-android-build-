@@ -118,7 +118,7 @@ public class LauncherActivity extends Activity {
         }
         Intent i = new Intent(this, SonicRActivity.class);
         i.putExtra(SonicRActivity.EXTRA_DATA_DIR, mData.getAbsolutePath());
-        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        android.content.SharedPreferences prefs = prefs(this);
         i.putExtra(SonicRActivity.EXTRA_STRETCH, prefs.getBoolean(KEY_STRETCH, false));
         i.putExtra(SonicRActivity.EXTRA_RESOLUTION, prefs.getInt(KEY_RESOLUTION, 0));
         i.putExtra(SonicRActivity.EXTRA_MSAA, prefs.getInt(KEY_MSAA, 0));
@@ -137,9 +137,17 @@ public class LauncherActivity extends Activity {
     static final String KEY_FPS = "fps";
     static final String KEY_VSYNC = "vsync";
     static final String KEY_DEBUG_LOG = "debugLog";
+    static final String KEY_TOUCH = "touchControls";
+    static final String KEY_TOUCH_OPACITY = "touchOpacity"; // percent, 20-100
+
+    /** Settings shared with the game process, which can change some of them. */
+    @SuppressWarnings("deprecation")
+    static android.content.SharedPreferences prefs(android.content.Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_MULTI_PROCESS);
+    }
 
     private void showSettings() {
-        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        android.content.SharedPreferences prefs = prefs(this);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(20);
@@ -163,6 +171,29 @@ public class LauncherActivity extends Activity {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sp.topMargin = dp(12);
         box.addView(smooth, sp);
+        android.widget.CheckBox touch = new android.widget.CheckBox(this);
+        touch.setText("Touch controls");
+        touch.setChecked(prefs.getBoolean(KEY_TOUCH, true));
+        box.addView(touch);
+        TextView opacityLabel = new TextView(this);
+        box.addView(opacityLabel);
+        android.widget.SeekBar opacity = new android.widget.SeekBar(this);
+        opacity.setMax(80);   // 20% to 100%
+        opacity.setProgress(prefs.getInt(KEY_TOUCH_OPACITY, 100) - 20);
+        opacityLabel.setText("Touch opacity: " + (opacity.getProgress() + 20) + "%");
+        opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar bar, int v, boolean user) {
+                opacityLabel.setText("Touch opacity: " + (v + 20) + "%");
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar bar) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar bar) { }
+        });
+        box.addView(opacity);
+        TextView menuHint = new TextView(this);
+        menuHint.setText("In game, tap with two fingers to open the game menu while the touch "
+            + "controls are hidden, switched off, or you're using a controller.");
+        box.addView(menuHint);
         android.widget.CheckBox vsync = new android.widget.CheckBox(this);
         vsync.setText("VSync (no tearing; off can feel more responsive)");
         vsync.setChecked(prefs.getBoolean(KEY_VSYNC, true));
@@ -189,6 +220,8 @@ public class LauncherActivity extends Activity {
                 .putBoolean(KEY_VSYNC, vsync.isChecked())
                 .putBoolean(KEY_FPS, fps.isChecked())
                 .putBoolean(KEY_DEBUG_LOG, log.isChecked())
+                .putBoolean(KEY_TOUCH, touch.isChecked())
+                .putInt(KEY_TOUCH_OPACITY, opacity.getProgress() + 20)
                 .apply())
             .setNegativeButton("Cancel", null)
             .show();
@@ -334,7 +367,7 @@ public class LauncherActivity extends Activity {
         mods.load();
         if (!mods.mods.isEmpty())
             ready.append("\nMods: ").append(mods.enabledCount()).append(" of ").append(mods.mods.size()).append(" on");
-        if (getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_DEBUG_LOG, false))
+        if (prefs(this).getBoolean(KEY_DEBUG_LOG, false))
             ready.append("\nDebug logging is on: ").append(new File(data, "logs").getAbsolutePath());
         if (!new File(data, "MUSIC").isDirectory())
             ready.append("\n\nNo MUSIC folder yet, so races will be silent apart from sound effects.");

@@ -891,6 +891,15 @@ Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeFpsTenths(JNIEnv *env, jclass cls
     return s_fpsTenths;
 }
 
+/* In-game menu: switch stretch-to-fill while playing (read every BeginFrame). */
+JNIEXPORT void JNICALL
+Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeSetStretch(JNIEnv *env, jclass cls, jboolean on)
+{
+    extern int g_stretchToFill;
+    (void)env; (void)cls;
+    g_stretchToFill = on ? 1 : 0;
+}
+
 static void count_frame(void)
 {
     Uint32 now = SDL_GetTicks();

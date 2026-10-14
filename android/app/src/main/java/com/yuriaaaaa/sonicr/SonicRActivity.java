@@ -29,6 +29,8 @@ public class SonicRActivity extends SDLActivity {
 
     /** Frames per second times ten, counted at each buffer swap (platform_sdl.c). */
     private static native int nativeFpsTenths();
+    /** Switches stretch-to-fill while playing (platform_sdl.c). */
+    private static native void nativeSetStretch(boolean on);
 
     private android.widget.TextView mFps;
     private final android.os.Handler mFpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -43,6 +45,7 @@ public class SonicRActivity extends SDLActivity {
 
     private TouchControlsView mTouch;
     private AlertDialog mQuitDialog;
+    private AlertDialog mMenuDialog;
 
     @Override
     protected String[] getLibraries() {
@@ -112,21 +115,113 @@ public class SonicRActivity extends SDLActivity {
         mTouch = new TouchControlsView(this);
         mLayout.addView(mTouch, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        if (getIntent().getBooleanExtra(EXTRA_FPS, false)) {
-            mFps = new android.widget.TextView(this);
-            mFps.setTextColor(android.graphics.Color.WHITE);
-            mFps.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
-            mFps.setBackgroundColor(android.graphics.Color.argb(140, 0, 0, 0));
-            int p = (int) (6 * getResources().getDisplayMetrics().density);
-            mFps.setPadding(p, p / 2, p, p / 2);
-            android.widget.RelativeLayout.LayoutParams lp = new android.widget.RelativeLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
-            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
-            lp.setMargins(p, p, 0, 0);
-            mLayout.addView(mFps, lp);
+        android.content.SharedPreferences prefs = LauncherActivity.prefs(this);
+        mTouch.setEnabledControls(prefs.getBoolean(LauncherActivity.KEY_TOUCH, true));
+        mTouch.setAlpha(prefs.getInt(LauncherActivity.KEY_TOUCH_OPACITY, 100) / 100f);
+        mTouch.setOnMenu(this::openGameMenu);
+
+        mFps = new android.widget.TextView(this);
+        mFps.setTextColor(android.graphics.Color.WHITE);
+        mFps.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
+        mFps.setBackgroundColor(android.graphics.Color.argb(140, 0, 0, 0));
+        int p = (int) (6 * getResources().getDisplayMetrics().density);
+        mFps.setPadding(p, p / 2, p, p / 2);
+        android.widget.RelativeLayout.LayoutParams lp = new android.widget.RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
+        lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
+        lp.setMargins(p, p, 0, 0);
+        mLayout.addView(mFps, lp);
+        showFps(getIntent().getBooleanExtra(EXTRA_FPS, false));
+    }
+
+    private void showFps(boolean on) {
+        mFpsHandler.removeCallbacks(mFpsTick);
+        mFps.setVisibility(on ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (on) {
             mFpsHandler.post(mFpsTick);
         }
+    }
+
+    /* Two-finger tap (while the touch controls aren't in use): settings that
+     * apply straight away, saved for next time too. */
+    private void openGameMenu() {
+        if ((mMenuDialog != null && mMenuDialog.isShowing())
+                || (mQuitDialog != null && mQuitDialog.isShowing())) {
+            return;
+        }
+        android.content.SharedPreferences prefs = LauncherActivity.prefs(this);
+        setGamePaused(true);
+
+        float d = getResources().getDisplayMetrics().density;
+        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        box.setOrientation(android.widget.LinearLayout.VERTICAL);
+        box.setPadding((int) (20 * d), (int) (8 * d), (int) (20 * d), 0);
+
+        android.widget.Switch touch = new android.widget.Switch(this);
+        touch.setText("Touch controls");
+        touch.setChecked(prefs.getBoolean(LauncherActivity.KEY_TOUCH, true));
+        touch.setOnCheckedChangeListener((b, on) -> {
+            prefs.edit().putBoolean(LauncherActivity.KEY_TOUCH, on).apply();
+            mTouch.setEnabledControls(on);
+        });
+        box.addView(touch);
+
+        android.widget.TextView opacityLabel = new android.widget.TextView(this);
+        box.addView(opacityLabel);
+        android.widget.SeekBar opacity = new android.widget.SeekBar(this);
+        opacity.setMax(80);   // 20% to 100%
+        int current = prefs.getInt(LauncherActivity.KEY_TOUCH_OPACITY, 100);
+        opacity.setProgress(current - 20);
+        opacityLabel.setText("Touch opacity: " + current + "%");
+        opacity.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar bar, int v, boolean user) {
+                int pct = v + 20;
+                opacityLabel.setText("Touch opacity: " + pct + "%");
+                mTouch.setAlpha(pct / 100f);
+                prefs.edit().putInt(LauncherActivity.KEY_TOUCH_OPACITY, pct).apply();
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar bar) { }
+            @Override public void onStopTrackingTouch(android.widget.SeekBar bar) { }
+        });
+        box.addView(opacity);
+
+        android.widget.Switch stretch = new android.widget.Switch(this);
+        stretch.setText("Stretch to fill (16:9)");
+        stretch.setChecked(prefs.getBoolean(LauncherActivity.KEY_STRETCH, false));
+        stretch.setOnCheckedChangeListener((b, on) -> {
+            prefs.edit().putBoolean(LauncherActivity.KEY_STRETCH, on).apply();
+            nativeSetStretch(on);
+        });
+        box.addView(stretch);
+
+        android.widget.Switch fps = new android.widget.Switch(this);
+        fps.setText("Show FPS counter");
+        fps.setChecked(mFps.getVisibility() == android.view.View.VISIBLE);
+        fps.setOnCheckedChangeListener((b, on) -> {
+            prefs.edit().putBoolean(LauncherActivity.KEY_FPS, on).apply();
+            showFps(on);
+        });
+        box.addView(fps);
+
+        android.widget.TextView note = new android.widget.TextView(this);
+        note.setText("Resolution, anti-aliasing, smooth textures and VSync are in the launcher's Settings.");
+        note.setPadding(0, (int) (10 * d), 0, 0);
+        box.addView(note);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(box);
+        mMenuDialog = new AlertDialog.Builder(this)
+            .setTitle("Game menu")
+            .setView(scroll)
+            .setOnCancelListener(dlg -> setGamePaused(false))
+            .setPositiveButton("Resume", (dlg, w) -> setGamePaused(false))
+            .setNegativeButton("Exit game", (dlg, w) -> {
+                mMenuDialog.dismiss();
+                askToQuit();
+            })
+            .show();
     }
 
     /* A real controller hides the touch controls until the screen is touched.
