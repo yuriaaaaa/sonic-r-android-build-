@@ -75,6 +75,7 @@ public class LauncherActivity extends Activity {
             v -> startActivity(new Intent(this, ModsActivity.class))));
         mMenu.addView(menuButton("Get mods", 0xFF1565C0,
             v -> startActivity(new Intent(this, ModBrowserActivity.class))));
+        mMenu.addView(menuButton("Multiplayer", 0xFFEF6C00, v -> showMultiplayer()));
         mMenu.addView(menuButton("Settings", 0xFF6A1B9A, v -> showSettings()));
         mMenu.setVisibility(android.view.View.GONE);
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
@@ -126,6 +127,8 @@ public class LauncherActivity extends Activity {
         i.putExtra(SonicRActivity.EXTRA_VSYNC, prefs.getBoolean(KEY_VSYNC, true));
         i.putExtra(SonicRActivity.EXTRA_FPS, prefs.getBoolean(KEY_FPS, false));
         i.putExtra(SonicRActivity.EXTRA_DEBUG_LOG, prefs.getBoolean(KEY_DEBUG_LOG, false));
+        i.putExtra(SonicRActivity.EXTRA_NET_NAME, prefs.getString(KEY_NET_NAME, ""));
+        i.putExtra(SonicRActivity.EXTRA_NET_HOST, prefs.getString(KEY_NET_HOST, ""));
         startActivity(i);
     }
 
@@ -138,6 +141,8 @@ public class LauncherActivity extends Activity {
     static final String KEY_VSYNC = "vsync";
     static final String KEY_DEBUG_LOG = "debugLog";
     static final String KEY_TOUCH = "touchControls";
+    static final String KEY_NET_NAME = "netName";
+    static final String KEY_NET_HOST = "netHost";   // blank = find a host on the Wi-Fi
     static final String KEY_TOUCH_OPACITY = "touchOpacity"; // percent, 20-100
 
     /** Settings shared with the game process, which can change some of them. */
@@ -225,6 +230,83 @@ public class LauncherActivity extends Activity {
                 .apply())
             .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    /* Network play is the engine's own LAN/online mode (UDP 7847). Phones on
+     * the same Wi-Fi, or one phone's hotspot, find each other automatically;
+     * a host IP is only needed when broadcasts are blocked. */
+    private void showMultiplayer() {
+        android.content.SharedPreferences prefs = prefs(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        box.setPadding(pad, dp(8), pad, 0);
+
+        TextView how = new TextView(this);
+        how.setText("Play 2 players (or more) over Wi-Fi with another phone or a PC running "
+            + "the same version and game data.\n\n"
+            + "1. Connect both phones to the same Wi-Fi, or turn on one phone's hotspot and "
+            + "join it from the other.\n"
+            + "2. Start Sonic R on both and open the game's network/multiplayer menu.\n"
+            + "3. One player hosts; the other joins and finds the host automatically.\n\n"
+            + "Your address on this network: " + localAddresses());
+        box.addView(how);
+
+        TextView nameLabel = new TextView(this);
+        nameLabel.setText("Your player name");
+        nameLabel.setPadding(0, dp(12), 0, 0);
+        box.addView(nameLabel);
+        android.widget.EditText name = new android.widget.EditText(this);
+        name.setSingleLine(true);
+        name.setText(prefs.getString(KEY_NET_NAME, ""));
+        name.setHint(Build.MODEL);
+        box.addView(name);
+
+        TextView hostLabel = new TextView(this);
+        hostLabel.setText("Join a host by IP (leave blank to find one automatically)");
+        hostLabel.setPadding(0, dp(12), 0, 0);
+        box.addView(hostLabel);
+        android.widget.EditText host = new android.widget.EditText(this);
+        host.setSingleLine(true);
+        host.setHint("e.g. 192.168.1.20");
+        host.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
+        host.setText(prefs.getString(KEY_NET_HOST, ""));
+        box.addView(host);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Multiplayer")
+            .setView(scroll)
+            .setPositiveButton("Save", (d, w) -> prefs.edit()
+                .putString(KEY_NET_NAME, name.getText().toString().trim())
+                .putString(KEY_NET_HOST, host.getText().toString().trim())
+                .apply())
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private static String localAddresses() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (java.net.NetworkInterface ni : java.util.Collections.list(
+                    java.net.NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                for (java.net.InetAddress a : java.util.Collections.list(ni.getInetAddresses())) {
+                    if (a instanceof java.net.Inet4Address && !a.isLoopbackAddress()) {
+                        String n = ni.getName();
+                        // Mobile data addresses can't be reached from the Wi-Fi.
+                        if (n.startsWith("rmnet") || n.startsWith("ccmni")) continue;
+                        if (sb.length() > 0) sb.append(", ");
+                        sb.append(a.getHostAddress());
+                        if (n.startsWith("ap") || n.startsWith("swlan") || n.contains("softap"))
+                            sb.append(" (hotspot)");
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return sb.length() > 0 ? sb.toString() : "not on Wi-Fi";
     }
 
     private android.widget.RadioGroup choices(LinearLayout box, String title, String[] labels, int checked) {

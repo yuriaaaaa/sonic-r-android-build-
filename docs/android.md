@@ -53,6 +53,17 @@ touch the screen.
 - **Two-finger tap** away from the buttons pauses and opens the game menu.
 - **Back** asks whether to quit to the launcher.
 
+## Multiplayer
+
+- **Split-screen:** connect two Bluetooth controllers to one phone and use the
+  game's 2-player mode.
+- **Over Wi-Fi:** the engine's LAN play works between phones, and with PCs
+  running the same version and data. Put both on the same Wi-Fi, or have one
+  phone share a hotspot that the other joins. One player hosts and the other
+  joins; hosts are found automatically. **Multiplayer** in the launcher shows
+  your address, sets your player name, and can join a host by IP when
+  automatic discovery is blocked.
+
 ## Settings
 
 | Setting | Launcher | Game menu |

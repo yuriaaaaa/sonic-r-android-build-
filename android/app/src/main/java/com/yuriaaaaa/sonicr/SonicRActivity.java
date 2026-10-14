@@ -22,6 +22,12 @@ public class SonicRActivity extends SDLActivity {
     static final String EXTRA_VSYNC = "vsync";
     static final String EXTRA_FPS = "fps";
     static final String EXTRA_DEBUG_LOG = "debugLog";
+    static final String EXTRA_NET_NAME = "netName";
+    static final String EXTRA_NET_HOST = "netHost";
+
+    /* Many phones drop Wi-Fi broadcast packets unless an app holds this, which
+     * would stop network play from finding hosts on the LAN. */
+    private android.net.wifi.WifiManager.MulticastLock mMulticastLock;
     static final int KEEP_LOGS = 10;
 
     private String mEngineLog;
@@ -72,6 +78,16 @@ public class SonicRActivity extends SDLActivity {
         if (!getIntent().getBooleanExtra(EXTRA_VSYNC, true)) {
             args.add("--novsync");
         }
+        String netName = getIntent().getStringExtra(EXTRA_NET_NAME);
+        if (netName != null && !netName.isEmpty()) {
+            args.add("--username");
+            args.add(netName);
+        }
+        String netHost = getIntent().getStringExtra(EXTRA_NET_HOST);
+        if (netHost != null && !netHost.isEmpty()) {
+            args.add("--host");
+            args.add(netHost);
+        }
         if (mEngineLog != null) {
             args.add("--log");
             args.add(mEngineLog);
@@ -113,6 +129,15 @@ public class SonicRActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         startDebugLogs();
         super.onCreate(savedInstanceState);
+        try {
+            android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager)
+                getApplicationContext().getSystemService(WIFI_SERVICE);
+            mMulticastLock = wifi.createMulticastLock("sonicr-lan");
+            mMulticastLock.setReferenceCounted(false);
+            mMulticastLock.acquire();
+        } catch (Exception e) {
+            mMulticastLock = null;
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (mBrokenLibraries || mLayout == null) {
             return;
@@ -445,6 +470,9 @@ public class SonicRActivity extends SDLActivity {
         finishAndRemoveTask();
         if (mLogcat != null) {
             mLogcat.destroy();
+        }
+        if (mMulticastLock != null) {
+            mMulticastLock.release();
         }
         android.os.Process.killProcess(android.os.Process.myPid());
     }
