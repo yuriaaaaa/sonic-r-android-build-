@@ -75,6 +75,7 @@ public class LauncherActivity extends Activity {
             v -> startActivity(new Intent(this, ModsActivity.class))));
         mMenu.addView(menuButton("Get mods", 0xFF1565C0,
             v -> startActivity(new Intent(this, ModBrowserActivity.class))));
+        mMenu.addView(menuButton("Settings", 0xFF6A1B9A, v -> showSettings()));
         mMenu.setVisibility(android.view.View.GONE);
         LinearLayout.LayoutParams mp = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -117,7 +118,26 @@ public class LauncherActivity extends Activity {
         }
         Intent i = new Intent(this, SonicRActivity.class);
         i.putExtra(SonicRActivity.EXTRA_DATA_DIR, mData.getAbsolutePath());
+        i.putExtra(SonicRActivity.EXTRA_STRETCH,
+            getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_STRETCH, false));
         startActivity(i);
+    }
+
+    static final String PREFS = "settings";
+    static final String KEY_STRETCH = "stretch";
+
+    private void showSettings() {
+        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String[] modes = { "4:3 (original, black bars)", "Stretch to fill (16:9)" };
+        int current = prefs.getBoolean(KEY_STRETCH, false) ? 1 : 0;
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Screen")
+            .setSingleChoiceItems(modes, current, (d, which) -> {
+                prefs.edit().putBoolean(KEY_STRETCH, which == 1).apply();
+                d.dismiss();
+            })
+            .setNegativeButton("Close", null)
+            .show();
     }
 
     private void showMenu(boolean ready) {

@@ -520,6 +520,9 @@ void PostRaceHandling2P(void)
     UpdatePlayerMovement(player1);                               /* 0x4d8ab8 */
 }
 
+/* --stretch: render_gl.c fills the whole screen instead of keeping 4:3. */
+int g_stretchToFill = 0;
+
 /* WinMain @ 0x004CDFC4 — 8254 bytes */
 int main(int argc, char *argv[])
 {
@@ -532,6 +535,7 @@ int main(int argc, char *argv[])
         {"unlock", no_argument, NULL, 'u'},
         {"fullscreen", no_argument, NULL, 'f'},
         {"username", required_argument, NULL, 'n'},
+        {"stretch", no_argument, NULL, 's'},
         {NULL, 0, NULL, 0}};
     int opt;
     while ((opt = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
@@ -550,6 +554,9 @@ int main(int argc, char *argv[])
                 break;
             case 'f':
                 s_cmdFullscreen = 1;
+                break;
+            case 's':
+                g_stretchToFill = 1;
                 break;
             case 'n':
                 strncpy(s_cmdUsername, optarg, sizeof(s_cmdUsername) - 1);

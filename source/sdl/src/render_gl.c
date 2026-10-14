@@ -49,6 +49,8 @@ int g_glBackingHeight = 480;
 /* 4:3 letterbox/pillarbox offset within the full backing surface.
  * All glViewport / glScissor calls add these offsets. */
 int g_glViewportOffsetX = 0;
+/* --stretch: fill the whole drawable instead of keeping 4:3. */
+extern int g_stretchToFill; /* main.c */
 int g_glViewportOffsetY = 0;
 
 /* Static RGBA4444 conversion buffer for texture uploads — max 1024×256×2 = 512 KB.
@@ -449,7 +451,11 @@ void BeginFrame(void)
 
     /* Compute largest 4:3 rect that fits in fullW x fullH */
     int vpW, vpH;
-    if (fullW * 3 > fullH * 4) {
+    if (g_stretchToFill) {
+        vpW = fullW;
+        vpH = fullH;
+    }
+    else if (fullW * 3 > fullH * 4) {
         /* Window is wider than 4:3 — pillarbox (black bars on sides) */
         vpH = fullH;
         vpW = (fullH * 4) / 3;
