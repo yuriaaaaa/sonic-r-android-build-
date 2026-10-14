@@ -125,6 +125,7 @@ public class LauncherActivity extends Activity {
         i.putExtra(SonicRActivity.EXTRA_SMOOTH, prefs.getBoolean(KEY_SMOOTH, false));
         i.putExtra(SonicRActivity.EXTRA_VSYNC, prefs.getBoolean(KEY_VSYNC, true));
         i.putExtra(SonicRActivity.EXTRA_FPS, prefs.getBoolean(KEY_FPS, false));
+        i.putExtra(SonicRActivity.EXTRA_DEBUG_LOG, prefs.getBoolean(KEY_DEBUG_LOG, false));
         startActivity(i);
     }
 
@@ -135,6 +136,7 @@ public class LauncherActivity extends Activity {
     static final String KEY_SMOOTH = "smooth";
     static final String KEY_FPS = "fps";
     static final String KEY_VSYNC = "vsync";
+    static final String KEY_DEBUG_LOG = "debugLog";
 
     private void showSettings() {
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -169,6 +171,10 @@ public class LauncherActivity extends Activity {
         fps.setText("Show FPS counter");
         fps.setChecked(prefs.getBoolean(KEY_FPS, false));
         box.addView(fps);
+        android.widget.CheckBox log = new android.widget.CheckBox(this);
+        log.setText("Debug logging (saves logs to the logs folder next to your game files)");
+        log.setChecked(prefs.getBoolean(KEY_DEBUG_LOG, false));
+        box.addView(log);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
@@ -182,6 +188,7 @@ public class LauncherActivity extends Activity {
                 .putBoolean(KEY_SMOOTH, smooth.isChecked())
                 .putBoolean(KEY_VSYNC, vsync.isChecked())
                 .putBoolean(KEY_FPS, fps.isChecked())
+                .putBoolean(KEY_DEBUG_LOG, log.isChecked())
                 .apply())
             .setNegativeButton("Cancel", null)
             .show();
@@ -327,6 +334,8 @@ public class LauncherActivity extends Activity {
         mods.load();
         if (!mods.mods.isEmpty())
             ready.append("\nMods: ").append(mods.enabledCount()).append(" of ").append(mods.mods.size()).append(" on");
+        if (getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_DEBUG_LOG, false))
+            ready.append("\nDebug logging is on: ").append(new File(data, "logs").getAbsolutePath());
         if (!new File(data, "MUSIC").isDirectory())
             ready.append("\n\nNo MUSIC folder yet, so races will be silent apart from sound effects.");
         mText.setText(ready.toString());

@@ -21,6 +21,11 @@ public class SonicRActivity extends SDLActivity {
     static final String EXTRA_SMOOTH = "smooth";
     static final String EXTRA_VSYNC = "vsync";
     static final String EXTRA_FPS = "fps";
+    static final String EXTRA_DEBUG_LOG = "debugLog";
+    static final int KEEP_LOGS = 10;
+
+    private String mEngineLog;
+    private Process mLogcat;
 
     /** Frames per second times ten, counted at each buffer swap (platform_sdl.c). */
     private static native int nativeFpsTenths();
@@ -62,11 +67,19 @@ public class SonicRActivity extends SDLActivity {
         if (!getIntent().getBooleanExtra(EXTRA_VSYNC, true)) {
             args.add("--novsync");
         }
+        if (mEngineLog != null) {
+            args.add("--log");
+            args.add(mEngineLog);
+        }
         String dir = getIntent().getStringExtra(EXTRA_DATA_DIR);
         if (dir != null) {
             args.add(dir);
         }
-        return args.toArray(new String[0]);
+        String[] out = args.toArray(new String[0]);
+        if (mEngineLog != null) {
+            appendLog(mEngineLog, "Arguments: " + String.join(" ", out) + "\n");
+        }
+        return out;
     }
 
     /* Resolution setting: render at a fixed height and let the display
@@ -90,6 +103,7 @@ public class SonicRActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        startDebugLogs();
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (mBrokenLibraries || mLayout == null) {
@@ -161,6 +175,58 @@ public class SonicRActivity extends SDLActivity {
         SDLActivity.handleNativeState();
     }
 
+    /* Debug logging: <data>/logs/game-<time>.log gets the engine's own output
+     * (with device details on top) and logcat-<time>.txt gets this process's
+     * Android log, which includes SDL messages and crash reports. */
+    private void startDebugLogs() {
+        String dataDir = getIntent().getStringExtra(EXTRA_DATA_DIR);
+        if (!getIntent().getBooleanExtra(EXTRA_DEBUG_LOG, false) || dataDir == null) {
+            return;
+        }
+        java.io.File logs = new java.io.File(dataDir, "logs");
+        logs.mkdirs();
+        pruneLogs(logs);
+        String stamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            .format(new java.util.Date());
+        mEngineLog = new java.io.File(logs, "game-" + stamp + ".log").getAbsolutePath();
+        String version = "?";
+        try {
+            version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception ignored) {
+        }
+        appendLog(mEngineLog, "Sonic R for Android " + version + "\n"
+            + "Device: " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+            + " (" + android.os.Build.HARDWARE + "), Android " + android.os.Build.VERSION.RELEASE
+            + " (API " + android.os.Build.VERSION.SDK_INT + ")\n"
+            + "Resolution setting: " + getIntent().getIntExtra(EXTRA_RESOLUTION, 0) + "\n");
+        try {
+            String logcat = new java.io.File(logs, "logcat-" + stamp + ".txt").getAbsolutePath();
+            mLogcat = new ProcessBuilder("logcat", "-v", "time",
+                "--pid=" + android.os.Process.myPid(), "-f", logcat).start();
+        } catch (java.io.IOException e) {
+            appendLog(mEngineLog, "Could not start logcat: " + e + "\n");
+        }
+    }
+
+    private static void pruneLogs(java.io.File logs) {
+        java.io.File[] files = logs.listFiles();
+        if (files == null) {
+            return;
+        }
+        java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        // Two files per run; keep the newest runs.
+        for (int i = KEEP_LOGS * 2; i < files.length; i++) {
+            files[i].delete();
+        }
+    }
+
+    private static void appendLog(String path, String text) {
+        try (java.io.FileWriter w = new java.io.FileWriter(path, true)) {
+            w.write(text);
+        } catch (java.io.IOException ignored) {
+        }
+    }
+
     private void exitToLauncher() {
         // The game runs in its own process (":game" in the manifest), so ending
         // it here returns to the launcher and the next Play starts clean.
@@ -169,6 +235,9 @@ public class SonicRActivity extends SDLActivity {
             | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(i);
         finishAndRemoveTask();
+        if (mLogcat != null) {
+            mLogcat.destroy();
+        }
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 

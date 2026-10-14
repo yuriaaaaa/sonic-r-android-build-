@@ -545,6 +545,7 @@ int main(int argc, char *argv[])
         {"msaa", required_argument, NULL, 'm'},
         {"smooth", no_argument, NULL, 'l'},
         {"novsync", no_argument, NULL, 'v'},
+        {"log", required_argument, NULL, 'g'},
         {NULL, 0, NULL, 0}};
     int opt;
     while ((opt = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
@@ -575,6 +576,15 @@ int main(int argc, char *argv[])
                 break;
             case 'v':
                 g_noVsync = 1;
+                break;
+            case 'g':
+                /* Debug logging: everything the engine prints goes to this file. */
+                if (freopen(optarg, "a", stdout)) {
+                    setvbuf(stdout, NULL, _IOLBF, 0);
+                    dup2(fileno(stdout), fileno(stderr));
+                    setvbuf(stderr, NULL, _IONBF, 0);
+                    printf("Sonic R log started\n");
+                }
                 break;
             case 'n':
                 strncpy(s_cmdUsername, optarg, sizeof(s_cmdUsername) - 1);
