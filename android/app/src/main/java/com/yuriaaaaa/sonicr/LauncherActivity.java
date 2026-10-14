@@ -294,7 +294,9 @@ public class LauncherActivity extends Activity {
             + "join it from the other.\n"
             + "2. Start Sonic R on both and open the game's network/multiplayer menu.\n"
             + "3. One player hosts; the other joins and finds the host automatically.\n\n"
-            + "Your address on this network: " + localAddresses());
+            + (localAddresses().equals("not on Wi-Fi")
+                ? "This phone isn't on Wi-Fi. That's fine for online rooms below, which work on mobile data."
+                : "Your address on this network: " + localAddresses()));
         box.addView(how);
 
 
