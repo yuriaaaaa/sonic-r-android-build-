@@ -743,6 +743,43 @@ void platform_pump_events(void)
 #define STICK_DEADZONE_I 19660  /* 0.6 * 32767 */
 #define JOY_CFG_MAX      32     /* g_joystickConfigWords array size */
 
+#ifdef __ANDROID__
+/* The network lobby's F-key prompts (F1 host/start, F2 join, ...) mapped from
+ * controllers and the touch buttons, as on Dreamcast (screen_misc.c). Touch
+ * buttons arrive as keys: Start = Enter, A = A, L = Z, R = X, Look = 1. */
+unsigned int platform_menu_buttons(void)
+{
+    static const struct { SDL_GameControllerButton b; unsigned int bit; } map[] = {
+        { SDL_CONTROLLER_BUTTON_A, MENUBTN_A },       { SDL_CONTROLLER_BUTTON_B, MENUBTN_B },
+        { SDL_CONTROLLER_BUTTON_X, MENUBTN_X },       { SDL_CONTROLLER_BUTTON_Y, MENUBTN_Y },
+        { SDL_CONTROLLER_BUTTON_START, MENUBTN_START },
+        { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, MENUBTN_L },
+        { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, MENUBTN_R },
+        { SDL_CONTROLLER_BUTTON_DPAD_UP, MENUBTN_UP },   { SDL_CONTROLLER_BUTTON_DPAD_DOWN, MENUBTN_DOWN },
+        { SDL_CONTROLLER_BUTTON_DPAD_LEFT, MENUBTN_LEFT }, { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, MENUBTN_RIGHT },
+    };
+    unsigned int mb = 0;
+    for (int i = 0; i < SDL_NumJoysticks(); i++) {
+        if (!SDL_IsGameController(i)) continue;
+        SDL_GameController *gc = SDL_GameControllerFromInstanceID(SDL_JoystickGetDeviceInstanceID(i));
+        if (!gc) continue;
+        for (size_t k = 0; k < sizeof(map) / sizeof(map[0]); k++)
+            if (SDL_GameControllerGetButton(gc, map[k].b)) mb |= map[k].bit;
+    }
+    const Uint8 *ks = SDL_GetKeyboardState(NULL);
+    if (ks[SDL_SCANCODE_RETURN]) mb |= MENUBTN_START;
+    if (ks[SDL_SCANCODE_A])      mb |= MENUBTN_A;
+    if (ks[SDL_SCANCODE_Z])      mb |= MENUBTN_L;
+    if (ks[SDL_SCANCODE_X])      mb |= MENUBTN_R;
+    if (ks[SDL_SCANCODE_1])      mb |= MENUBTN_Y;
+    if (ks[SDL_SCANCODE_UP])     mb |= MENUBTN_UP;
+    if (ks[SDL_SCANCODE_DOWN])   mb |= MENUBTN_DOWN;
+    if (ks[SDL_SCANCODE_LEFT])   mb |= MENUBTN_LEFT;
+    if (ks[SDL_SCANCODE_RIGHT])  mb |= MENUBTN_RIGHT;
+    return mb;
+}
+#endif
+
 int platform_init_gamepads(void)
 {
     LoadGameControllerMappings();

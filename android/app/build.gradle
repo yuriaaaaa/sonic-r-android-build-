@@ -11,8 +11,8 @@ android {
         applicationId 'com.yuriaaaaa.sonicr'
         minSdk 24
         targetSdk 35
-        versionCode 18
-        versionName '0.12.0'
+        versionCode 19
+        versionName '0.13.0'
         ndk {
             abiFilters 'arm64-v8a'
         }
@@ -42,6 +42,8 @@ android {
         main {
             // The repo's DATA/ extras, copied into the player's data folder on first run.
             assets.srcDirs = ["$buildDir/generated/sonicr-assets"]
+            // libsonicrnetplay.so (online rooms), built by build.sh from ../netplay with cargo.
+            jniLibs.srcDirs += ["../netplay/out/jniLibs"]
         }
     }
 

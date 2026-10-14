@@ -72,6 +72,25 @@ if [ ! -f "$PREFIX/lib/libarchive.a" ]; then
     cp deps/libarchive-build/libarchive/libarchive.a "$PREFIX/lib/"
 fi
 
+# Online rooms: sonic-r-netplay's sidecar as libsonicrnetplay.so (Rust). Needs
+# rustup's aarch64-linux-android target; without it the APK builds with online
+# rooms switched off.
+NETPLAY_OUT="netplay/out/jniLibs/arm64-v8a"
+if command -v cargo >/dev/null && rustup target list --installed 2>/dev/null | grep -q aarch64-linux-android; then
+    echo "Building the netplay library"
+    TOOLS="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+    (cd netplay &&
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLS/aarch64-linux-android24-clang" \
+        CC_aarch64_linux_android="$TOOLS/aarch64-linux-android24-clang" \
+        AR_aarch64_linux_android="$TOOLS/llvm-ar" \
+        CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=16384" \
+        cargo build --release --locked --target aarch64-linux-android --lib)
+    mkdir -p "$NETPLAY_OUT"
+    cp netplay/target/aarch64-linux-android/release/libsonicrnetplay.so "$NETPLAY_OUT/"
+else
+    echo "cargo or the aarch64-linux-android Rust target is missing; building without online rooms" >&2
+fi
+
 # The Java side of SDL (app/src/main/java/org/libsdl/app) is copied from
 # SDL $SDL2_VERSION; re-copy it from deps/SDL2/android-project when bumping.
 

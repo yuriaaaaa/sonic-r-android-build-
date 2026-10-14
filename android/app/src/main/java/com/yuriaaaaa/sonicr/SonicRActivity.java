@@ -24,6 +24,8 @@ public class SonicRActivity extends SDLActivity {
     static final String EXTRA_DEBUG_LOG = "debugLog";
     static final String EXTRA_NET_NAME = "netName";
     static final String EXTRA_NET_HOST = "netHost";
+    static final String EXTRA_NET_PORT = "netPort";   // netplay: tunnel port on 127.0.0.1
+    static final String EXTRA_NET_AUTO = "netAuto";   // netplay: "host" or "join" (skip to the lobby)
 
     /* Many phones drop Wi-Fi broadcast packets unless an app holds this, which
      * would stop network play from finding hosts on the LAN. */
@@ -88,6 +90,17 @@ public class SonicRActivity extends SDLActivity {
         if (netHost != null && !netHost.isEmpty()) {
             args.add("--host");
             args.add(netHost);
+        }
+        int netPort = getIntent().getIntExtra(EXTRA_NET_PORT, 0);
+        if (netPort > 0) {
+            args.add("--port");
+            args.add(Integer.toString(netPort));
+        }
+        String netAuto = getIntent().getStringExtra(EXTRA_NET_AUTO);
+        if ("host".equals(netAuto)) {
+            args.add("--autohost");
+        } else if ("join".equals(netAuto)) {
+            args.add("--autojoin");
         }
         if (mEngineLog != null) {
             args.add("--log");

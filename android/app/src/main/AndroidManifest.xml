@@ -17,11 +17,6 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
-    <!-- So the Multiplayer screen can see and open the Tailscale app. -->
-    <queries>
-        <package android:name="com.tailscale.ipn" />
-    </queries>
-
     <application android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
@@ -75,6 +70,11 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".NetplayActivity"
+            android:exported="false"
+            android:process=":game"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" />
         <activity android:name=".SonicRActivity"
             android:exported="false"
             android:process=":game"

@@ -76,13 +76,15 @@ touch the screen.
   joins; hosts are found automatically. **Multiplayer** in the launcher shows
   your address, sets your player name, and can join a host by IP when
   automatic discovery is blocked.
-- **Online with Tailscale:** install the free [Tailscale](https://tailscale.com/download/android)
-  app on both phones and put them on the same tailnet (same account, or the host
-  shares their device). The host starts a game and sends their Tailscale IP
-  (100.x.y.z, shown with a Copy button under **Multiplayer**); the other player
-  enters it under "Join a host by IP". Discovery doesn't work over Tailscale, so
-  the IP is needed. Tailscale is used as a separate app: Android allows one VPN at
-  a time, and Tailscale needs its own sign-in.
+- **Online rooms:** races over the internet through a
+  [sonic-r-netplay](https://github.com/ZinexDa/sonic-r-netplay) hub, the same
+  hub its Windows launcher uses, so phones and PCs can share rooms. Under
+  **Multiplayer**, everyone enters the hub address once. One player taps
+  **Host a room**; the others tap **Find rooms** and pick it. The game opens
+  straight into the network lobby, and the host presses Start (or A) to begin
+  once everyone is in. Players connect directly where their routers allow it,
+  and through the hub's relay otherwise. Someone has to run the hub: see
+  [netplay-hub.md](netplay-hub.md).
 
 ## Settings
 

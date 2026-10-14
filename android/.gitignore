@@ -6,3 +6,5 @@ deps/
 local.properties
 *.keystore
 *.jks
+netplay/target/
+netplay/out/

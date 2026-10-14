@@ -117,7 +117,12 @@ public class LauncherActivity extends Activity {
         if (mData == null) {
             return;
         }
-        Intent i = new Intent(this, SonicRActivity.class);
+        startActivity(gameIntent(SonicRActivity.class));
+    }
+
+    /** The game's launch intent with every setting, aimed at `target`. */
+    private Intent gameIntent(Class<?> target) {
+        Intent i = new Intent(this, target);
         i.putExtra(SonicRActivity.EXTRA_DATA_DIR, mData.getAbsolutePath());
         android.content.SharedPreferences prefs = prefs(this);
         i.putExtra(SonicRActivity.EXTRA_STRETCH, prefs.getBoolean(KEY_STRETCH, false));
@@ -129,7 +134,7 @@ public class LauncherActivity extends Activity {
         i.putExtra(SonicRActivity.EXTRA_DEBUG_LOG, prefs.getBoolean(KEY_DEBUG_LOG, false));
         i.putExtra(SonicRActivity.EXTRA_NET_NAME, prefs.getString(KEY_NET_NAME, ""));
         i.putExtra(SonicRActivity.EXTRA_NET_HOST, prefs.getString(KEY_NET_HOST, ""));
-        startActivity(i);
+        return i;
     }
 
     static final String PREFS = "settings";
@@ -143,6 +148,7 @@ public class LauncherActivity extends Activity {
     static final String KEY_TOUCH = "touchControls";
     static final String KEY_NET_NAME = "netName";
     static final String KEY_NET_HOST = "netHost";   // blank = find a host on the Wi-Fi
+    static final String KEY_NET_HUB = "netHub";     // sonic-r-netplay hub for online rooms
     static final String KEY_TOUCH_OPACITY = "touchOpacity"; // percent, 20-100
     static final String KEY_TOUCH_PROFILE = "touchProfile"; // active layout, 1-3
     static final int TOUCH_PROFILES = 3;
@@ -289,45 +295,6 @@ public class LauncherActivity extends Activity {
             + "Your address on this network: " + localAddresses());
         box.addView(how);
 
-        // Over the internet: Tailscale puts both phones on one private network. Hosts
-        // can't be found automatically there, so the joiner enters the host's Tailscale IP.
-        TextView tsTitle = new TextView(this);
-        tsTitle.setText("Online with Tailscale");
-        tsTitle.setTypeface(null, android.graphics.Typeface.BOLD);
-        tsTitle.setPadding(0, dp(14), 0, dp(4));
-        box.addView(tsTitle);
-        String tsIp = tailscaleAddress();
-        boolean tsInstalled = getPackageManager().getLaunchIntentForPackage(TAILSCALE_PACKAGE) != null;
-        TextView ts = new TextView(this);
-        ts.setText((tsIp != null
-                ? "Tailscale is on. Your Tailscale IP: " + tsIp + "\n\n"
-                : tsInstalled ? "Tailscale is installed but not connected.\n\n"
-                              : "Play with friends anywhere using the free Tailscale app.\n\n")
-            + "1. Both players install Tailscale and sign in to the same account, or the host "
-            + "shares their phone with the other player from Tailscale.\n"
-            + "2. The host starts a game and sends their Tailscale IP.\n"
-            + "3. The other player types it under \"Join a host by IP\" below, then joins.");
-        box.addView(ts);
-        LinearLayout tsRow = new LinearLayout(this);
-        tsRow.setOrientation(LinearLayout.HORIZONTAL);
-        if (tsIp != null) {
-            android.widget.Button copy = new android.widget.Button(this);
-            copy.setText("Copy my IP");
-            copy.setAllCaps(false);
-            copy.setOnClickListener(v -> {
-                android.content.ClipboardManager cm =
-                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("Tailscale IP", tsIp));
-                android.widget.Toast.makeText(this, "Copied " + tsIp, android.widget.Toast.LENGTH_SHORT).show();
-            });
-            tsRow.addView(copy);
-        }
-        android.widget.Button openTs = new android.widget.Button(this);
-        openTs.setText(tsInstalled ? "Open Tailscale" : "Get Tailscale");
-        openTs.setAllCaps(false);
-        openTs.setOnClickListener(v -> openTailscale());
-        tsRow.addView(openTs);
-        box.addView(tsRow);
 
         TextView nameLabel = new TextView(this);
         nameLabel.setText("Your player name");
@@ -339,20 +306,62 @@ public class LauncherActivity extends Activity {
         name.setHint(Build.MODEL);
         box.addView(name);
 
+        // Online rooms through a sonic-r-netplay hub: host a room, or pick one to join.
+        final android.app.AlertDialog[] dialog = new android.app.AlertDialog[1];
+        TextView onlineTitle = new TextView(this);
+        onlineTitle.setText("Online rooms");
+        onlineTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        onlineTitle.setPadding(0, dp(14), 0, dp(4));
+        box.addView(onlineTitle);
+        TextView online = new TextView(this);
+        online.setText("Race over the internet through a Sonic R netplay hub. Everyone enters the "
+            + "same hub address. One player hosts a room; the others find it and join. In the "
+            + "lobby the host presses Start (or A) to begin once everyone is in.");
+        box.addView(online);
+        android.widget.EditText hub = new android.widget.EditText(this);
+        hub.setSingleLine(true);
+        hub.setHint("Hub address, e.g. 203.0.113.5 or wss://hub.example.com");
+        hub.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        hub.setText(prefs.getString(KEY_NET_HUB, ""));
+        box.addView(hub);
+        LinearLayout onlineRow = new LinearLayout(this);
+        onlineRow.setOrientation(LinearLayout.HORIZONTAL);
+        android.widget.Button hostRoom = new android.widget.Button(this);
+        hostRoom.setText("Host a room");
+        hostRoom.setAllCaps(false);
+        android.widget.Button findRooms = new android.widget.Button(this);
+        findRooms.setText("Find rooms");
+        findRooms.setAllCaps(false);
+        onlineRow.addView(hostRoom);
+        onlineRow.addView(findRooms);
+        box.addView(onlineRow);
+        hostRoom.setOnClickListener(v -> {
+            String h = saveOnline(prefs, name, hub);
+            if (h == null) return;
+            if (dialog[0] != null) dialog[0].dismiss();
+            hostRoom(h, playerName(prefs));
+        });
+        findRooms.setOnClickListener(v -> {
+            String h = saveOnline(prefs, name, hub);
+            if (h == null) return;
+            if (dialog[0] != null) dialog[0].dismiss();
+            findRooms(h);
+        });
+
         TextView hostLabel = new TextView(this);
         hostLabel.setText("Join a host by IP (leave blank to find one automatically)");
         hostLabel.setPadding(0, dp(12), 0, 0);
         box.addView(hostLabel);
         android.widget.EditText host = new android.widget.EditText(this);
         host.setSingleLine(true);
-        host.setHint("e.g. 192.168.1.20 or 100.101.102.103");
+        host.setHint("e.g. 192.168.1.20");
         host.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
         host.setText(prefs.getString(KEY_NET_HOST, ""));
         box.addView(host);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
-        new android.app.AlertDialog.Builder(this)
+        dialog[0] = new android.app.AlertDialog.Builder(this)
             .setTitle("Multiplayer")
             .setView(scroll)
             .setPositiveButton("Save", (d, w) -> prefs.edit()
@@ -363,42 +372,114 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
-    static final String TAILSCALE_PACKAGE = "com.tailscale.ipn";
+    private String playerName(android.content.SharedPreferences prefs) {
+        String n = prefs.getString(KEY_NET_NAME, "").trim();
+        return n.isEmpty() ? Build.MODEL : n;
+    }
 
+    /** Saves the name and hub fields; returns the hub, or null (with a hint) when it's blank. */
+    private String saveOnline(android.content.SharedPreferences prefs, android.widget.EditText name,
+                              android.widget.EditText hub) {
+        String h = hub.getText().toString().trim();
+        prefs.edit().putString(KEY_NET_NAME, name.getText().toString().trim())
+            .putString(KEY_NET_HUB, h).apply();
+        if (h.isEmpty()) {
+            hub.setError("Enter the hub address first");
+            return null;
+        }
+        if (mData == null) {
+            android.widget.Toast.makeText(this, "Add the game data first", android.widget.Toast.LENGTH_LONG).show();
+            return null;
+        }
+        if (!Netplay.available()) {
+            android.widget.Toast.makeText(this, "Online rooms aren't included in this build",
+                android.widget.Toast.LENGTH_LONG).show();
+            return null;
+        }
+        return h;
+    }
+
+    private void hostRoom(String hub, String player) {
+        Intent i = gameIntent(NetplayActivity.class);
+        i.putExtra(NetplayActivity.EXTRA_MODE, "host");
+        i.putExtra(NetplayActivity.EXTRA_HUB, hub);
+        i.putExtra(NetplayActivity.EXTRA_ROOM_NAME, player + "'s room");
+        startActivity(i);
+    }
+
+    private void joinRoom(String hub, String id, String roomName) {
+        Intent i = gameIntent(NetplayActivity.class);
+        i.putExtra(NetplayActivity.EXTRA_MODE, "join");
+        i.putExtra(NetplayActivity.EXTRA_HUB, hub);
+        i.putExtra(NetplayActivity.EXTRA_ROOM, id);
+        i.putExtra(NetplayActivity.EXTRA_ROOM_NAME, roomName);
+        startActivity(i);
+    }
+
+    /* Lists the hub's rooms; tapping an open one joins it. */
+    private void findRooms(String hub) {
+        android.app.AlertDialog wait = new android.app.AlertDialog.Builder(this)
+            .setTitle("Finding rooms…")
+            .setMessage("Asking " + hub)
+            .setCancelable(false)
+            .show();
+        new Thread(() -> {
+            String result = Netplay.nativeListRooms(hub);
+            runOnUiThread(() -> {
+                if (isDestroyed()) return;
+                wait.dismiss();
+                showRooms(hub, result);
+            });
+        }, "netplay-list").start();
+    }
+
+    private void showRooms(String hub, String result) {
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        java.util.List<String[]> open = new java.util.ArrayList<>();   // {id, name} per label, null if full
+        String error = null;
+        try {
+            org.json.JSONObject j = new org.json.JSONObject(result);
+            if (j.has("error")) {
+                error = j.getString("error");
+            } else {
+                org.json.JSONArray rooms = j.getJSONArray("rooms");
+                for (int k = 0; k < rooms.length(); k++) {
+                    org.json.JSONObject r = rooms.getJSONObject(k);
+                    boolean joinable = r.optBoolean("joinable");
+                    labels.add(r.optString("name") + "  (" + r.optInt("players") + "/" + r.optInt("max")
+                        + (joinable ? ")" : ", racing or full)"));
+                    open.add(joinable ? new String[] { r.optString("id"), r.optString("name") } : null);
+                }
+            }
+        } catch (org.json.JSONException e) {
+            error = "The hub sent something unexpected";
+        }
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this)
+            .setNegativeButton("Close", null)
+            .setNeutralButton("Refresh", (d, w) -> findRooms(hub));
+        if (error != null) {
+            b.setTitle("Couldn't reach the hub").setMessage(error);
+        } else if (labels.isEmpty()) {
+            b.setTitle("No rooms yet").setMessage("Nobody is hosting on this hub right now. Host a room, "
+                + "or refresh once your friend has.");
+        } else {
+            b.setTitle("Rooms").setItems(labels.toArray(new String[0]), (d, which) -> {
+                String[] room = open.get(which);
+                if (room == null) {
+                    android.widget.Toast.makeText(this, "That room is racing or full", android.widget.Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                joinRoom(hub, room[0], room[1]);
+            });
+        }
+        b.show();
+    }
+
+    /* VPN (e.g. Tailscale) addresses, which aren't on the Wi-Fi. */
     private static boolean isTailscale(java.net.InetAddress a) {
         byte[] b = a.getAddress();
-        // Tailscale hands out 100.64.0.0/10 (carrier-grade NAT range) addresses.
+        // 100.64.0.0/10, the carrier-grade NAT range Tailscale uses.
         return b.length == 4 && (b[0] & 0xFF) == 100 && (b[1] & 0xC0) == 64;
-    }
-
-    /** This phone's Tailscale IPv4 address, or null when Tailscale isn't connected. */
-    private static String tailscaleAddress() {
-        try {
-            for (java.net.NetworkInterface ni : java.util.Collections.list(
-                    java.net.NetworkInterface.getNetworkInterfaces())) {
-                if (!ni.isUp() || !ni.getName().startsWith("tun")) continue;
-                for (java.net.InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
-                    if (a instanceof java.net.Inet4Address && isTailscale(a))
-                        return a.getHostAddress();
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    private void openTailscale() {
-        android.content.Intent launch = getPackageManager().getLaunchIntentForPackage(TAILSCALE_PACKAGE);
-        if (launch != null) {
-            startActivity(launch);
-            return;
-        }
-        try {
-            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                android.net.Uri.parse("market://details?id=" + TAILSCALE_PACKAGE)));
-        } catch (android.content.ActivityNotFoundException e) {
-            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                android.net.Uri.parse("https://tailscale.com/download/android")));
-        }
     }
 
     private static String localAddresses() {
@@ -412,7 +493,7 @@ public class LauncherActivity extends Activity {
                         String n = ni.getName();
                         // Mobile data addresses can't be reached from the Wi-Fi.
                         if (n.startsWith("rmnet") || n.startsWith("ccmni")) continue;
-                        // VPNs (Tailscale is shown separately) aren't on the Wi-Fi either.
+                        // VPN addresses aren't on the Wi-Fi either.
                         if (n.startsWith("tun") || isTailscale(a)) continue;
                         if (sb.length() > 0) sb.append(", ");
                         sb.append(a.getHostAddress());

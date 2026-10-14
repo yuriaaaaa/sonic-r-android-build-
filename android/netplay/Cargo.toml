@@ -1,0 +1,25 @@
+# JNI wrapper around sonic-r-netplay's sidecar, built as libsonicrnetplay.so for
+# the Android launcher. See vendor/README.md for where the netplay code is from.
+[package]
+name = "sonicrnetplay"
+version = "1.5.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+sidecar = { path = "vendor/sidecar" }
+proto = { path = "vendor/proto" }
+jni = { version = "0.21", default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+serde_json = "1"
+uuid = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
