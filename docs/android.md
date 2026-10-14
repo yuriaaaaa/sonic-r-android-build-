@@ -50,7 +50,10 @@ On-screen buttons send the same keys as the PC version: D-pad, A (accelerate),
 Jump, Look, L/R, Back and Start. A connected controller hides them until you
 touch the screen.
 
-- **Two-finger tap** away from the buttons pauses and opens the game menu.
+- **Three-finger tap** away from the buttons pauses and opens the game menu.
+- **Edit touch controls** (launcher Settings or the game menu): drag controls
+  to move them, and resize or rename the selected one. Layouts save to three
+  profiles; pick the active one in Settings or the game menu.
 - **Back** asks whether to quit to the launcher.
 
 ## Multiplayer
@@ -75,6 +78,7 @@ touch the screen.
 | VSync | yes | yes |
 | FPS counter | yes | yes |
 | Touch controls on/off and opacity | yes | yes |
+| Touch layout profile and editor | yes | yes |
 | Debug logging | yes | |
 
 The game runs at 30 fps, like the original.

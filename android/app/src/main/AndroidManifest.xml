@@ -34,6 +34,11 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".TouchEditorActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustNothing"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
         <activity android:name=".ModsActivity"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
@@ -68,6 +73,7 @@
         <activity android:name=".SonicRActivity"
             android:exported="false"
             android:process=":game"
+            android:windowSoftInputMode="adjustNothing"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
             android:screenOrientation="sensorLandscape"

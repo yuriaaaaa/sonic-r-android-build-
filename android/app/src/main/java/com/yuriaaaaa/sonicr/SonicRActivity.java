@@ -54,6 +54,7 @@ public class SonicRActivity extends SDLActivity {
     private TouchControlsView mTouch;
     private AlertDialog mQuitDialog;
     private AlertDialog mMenuDialog;
+    private boolean mEditingTouch;
 
     @Override
     protected String[] getLibraries() {
@@ -173,7 +174,7 @@ public class SonicRActivity extends SDLActivity {
         }
     }
 
-    /* Two-finger tap away from the touch controls: settings that
+    /* Three-finger tap away from the touch controls: settings that
      * apply straight away, saved for next time too. */
     private void openGameMenu() {
         if ((mMenuDialog != null && mMenuDialog.isShowing())
@@ -249,6 +250,45 @@ public class SonicRActivity extends SDLActivity {
             }
         });
         box.addView(res);
+
+        android.widget.TextView profLabel = new android.widget.TextView(ui);
+        profLabel.setText("Touch layout");
+        profLabel.setTextColor(android.graphics.Color.WHITE);
+        profLabel.setPadding(0, (int) (8 * d), 0, 0);
+        box.addView(profLabel);
+        android.widget.RadioGroup profile = new android.widget.RadioGroup(ui);
+        profile.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        for (int p = 1; p <= LauncherActivity.TOUCH_PROFILES; p++) {
+            android.widget.RadioButton rb = new android.widget.RadioButton(ui);
+            rb.setId(p);
+            rb.setText("Profile " + p);
+            rb.setTextColor(android.graphics.Color.WHITE);
+            rb.setButtonTintList(checkedTint(MENU_GOLD, 0xB0FFFFFF));
+            profile.addView(rb);
+        }
+        profile.check(LauncherActivity.activeProfile(this));
+        profile.setOnCheckedChangeListener((g, id) -> {
+            prefs.edit().putInt(LauncherActivity.KEY_TOUCH_PROFILE, id).apply();
+            mTouch.reloadLayout();
+        });
+        box.addView(profile);
+        android.widget.Button edit = new android.widget.Button(ui);
+        edit.setText("Edit touch controls");
+        edit.setAllCaps(false);
+        edit.setTextColor(MENU_BLUE);
+        android.graphics.drawable.GradientDrawable chip = new android.graphics.drawable.GradientDrawable();
+        chip.setColor(MENU_GOLD);
+        chip.setCornerRadius(14 * d);
+        edit.setBackground(chip);
+        edit.setOnClickListener(v -> {
+            mEditingTouch = true;
+            mMenuDialog.dismiss();
+            new TouchLayoutEditor(this, mLayout, mTouch, saved -> {
+                mEditingTouch = false;
+                setGamePaused(false);
+            });
+        });
+        box.addView(edit);
 
         box.addView(menuSwitch(ui, "Stretch to fill (16:9)", prefs.getBoolean(LauncherActivity.KEY_STRETCH, false), on -> {
             prefs.edit().putBoolean(LauncherActivity.KEY_STRETCH, on).apply();
@@ -359,6 +399,16 @@ public class SonicRActivity extends SDLActivity {
         w.getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility());
         dialog.show();
         w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+    }
+
+    /* Keep the game paused while the touch editor is open: SDL resumes it as
+     * soon as the window gets focus back from the menu. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && mEditingTouch) {
+            setGamePaused(true);
+        }
     }
 
     /* A real controller hides the touch controls until the screen is touched.

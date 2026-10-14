@@ -144,6 +144,17 @@ public class LauncherActivity extends Activity {
     static final String KEY_NET_NAME = "netName";
     static final String KEY_NET_HOST = "netHost";   // blank = find a host on the Wi-Fi
     static final String KEY_TOUCH_OPACITY = "touchOpacity"; // percent, 20-100
+    static final String KEY_TOUCH_PROFILE = "touchProfile"; // active layout, 1-3
+    static final int TOUCH_PROFILES = 3;
+
+    static String layoutKey(int profile) {
+        return "touchLayout" + profile;
+    }
+
+    static int activeProfile(android.content.Context ctx) {
+        int p = prefs(ctx).getInt(KEY_TOUCH_PROFILE, 1);
+        return p < 1 || p > TOUCH_PROFILES ? 1 : p;
+    }
 
     /** Settings shared with the game process, which can change some of them. */
     @SuppressWarnings("deprecation")
@@ -195,8 +206,33 @@ public class LauncherActivity extends Activity {
             @Override public void onStopTrackingTouch(android.widget.SeekBar bar) { }
         });
         box.addView(opacity);
+        TextView profLabel = new TextView(this);
+        profLabel.setText("Touch layout profile");
+        profLabel.setPadding(0, dp(8), 0, 0);
+        box.addView(profLabel);
+        android.widget.RadioGroup profile = new android.widget.RadioGroup(this);
+        profile.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        for (int p = 1; p <= TOUCH_PROFILES; p++) {
+            android.widget.RadioButton rb = new android.widget.RadioButton(this);
+            rb.setId(p);
+            rb.setText("Profile " + p);
+            profile.addView(rb);
+        }
+        profile.check(activeProfile(this));
+        box.addView(profile);
+        Button edit = new Button(this);
+        edit.setText("Edit touch controls");
+        edit.setAllCaps(false);
+        final android.app.AlertDialog[] settingsDialog = new android.app.AlertDialog[1];
+        edit.setOnClickListener(v -> {
+            // Save what's set here first, so the editor's profile choice isn't overwritten.
+            if (settingsDialog[0] != null)
+                settingsDialog[0].getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+            startActivity(new Intent(this, TouchEditorActivity.class));
+        });
+        box.addView(edit);
         TextView menuHint = new TextView(this);
-        menuHint.setText("In game, tap with two fingers anywhere away from the touch buttons "
+        menuHint.setText("In game, tap with three fingers anywhere away from the touch buttons "
             + "to open the game menu.");
         box.addView(menuHint);
         android.widget.CheckBox vsync = new android.widget.CheckBox(this);
@@ -214,7 +250,7 @@ public class LauncherActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
-        new android.app.AlertDialog.Builder(this)
+        settingsDialog[0] = new android.app.AlertDialog.Builder(this)
             .setTitle("Settings")
             .setView(scroll)
             .setPositiveButton("Save", (d, w) -> prefs.edit()
@@ -227,6 +263,7 @@ public class LauncherActivity extends Activity {
                 .putBoolean(KEY_DEBUG_LOG, log.isChecked())
                 .putBoolean(KEY_TOUCH, touch.isChecked())
                 .putInt(KEY_TOUCH_OPACITY, opacity.getProgress() + 20)
+                .putInt(KEY_TOUCH_PROFILE, Math.max(1, profile.getCheckedRadioButtonId()))
                 .apply())
             .setNegativeButton("Cancel", null)
             .show();
