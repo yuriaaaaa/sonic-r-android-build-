@@ -243,6 +243,9 @@ final class GameBanana {
         return connection;
     }
 
+    // API answers are a few hundred KB at most.
+    private static final int MAX_JSON = 8 << 20;
+
     static JSONObject get(String url) throws IOException {
         HttpURLConnection connection = open(url);
         connection.setRequestProperty("Accept", "application/json");
@@ -254,8 +257,11 @@ final class GameBanana {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 byte[] buffer = new byte[16384];
                 int n;
-                while ((n = in.read(buffer)) > 0)
+                while ((n = in.read(buffer)) > 0) {
                     out.write(buffer, 0, n);
+                    if (out.size() > MAX_JSON)
+                        throw new IOException("GameBanana sent too much data");
+                }
                 return new JSONObject(new String(out.toByteArray(), StandardCharsets.UTF_8));
             }
         } catch (JSONException e) {

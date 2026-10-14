@@ -63,6 +63,14 @@ static int clean_name(const char* name, char* out, size_t size)
     return n > 0;
 }
 
+// Limits against archives that unpack to far more than they hold ("zip bombs").
+#ifndef MAX_ENTRIES
+#define MAX_ENTRIES      100000
+#endif
+#ifndef MAX_UNPACKED
+#define MAX_UNPACKED     (8LL << 30)
+#endif
+
 typedef int (*progress_fn)(void* user, long long done, long long total);
 
 // Returns 0 on success; otherwise writes a message into error.
@@ -83,8 +91,8 @@ int modarchive_extract(const char* archivePath, const char* destination, progres
         goto done;
     }
 
-    long long lastReport = 0;
-    int files = 0;
+    long long lastReport = 0, written = 0, lastWritten = 0;
+    int files = 0, entries = 0;
     for (;;) {
         struct archive_entry* entry;
         int r = archive_read_next_header(a, &entry);
@@ -92,6 +100,10 @@ int modarchive_extract(const char* archivePath, const char* destination, progres
             break;
         if (r < ARCHIVE_WARN) {
             snprintf(error, errorSize, "The archive is damaged or unsupported: %s", archive_error_string(a));
+            goto done;
+        }
+        if (++entries > MAX_ENTRIES) {
+            snprintf(error, errorSize, "The archive has too many files");
             goto done;
         }
 
@@ -140,9 +152,18 @@ int modarchive_extract(const char* archivePath, const char* destination, progres
                 }
                 off += w;
             }
+            written += n;
+            if (written > MAX_UNPACKED) {
+                snprintf(error, errorSize, "The archive unpacks to more than 8 GB");
+                close(fd);
+                goto done;
+            }
+            // Report (and check for cancel) as input is read or output is written, so an
+            // archive that expands a lot can still be cancelled.
             long long consumed = archive_filter_bytes(a, -1);
-            if (progress && consumed - lastReport >= (1 << 20)) {
+            if (progress && (consumed - lastReport >= (1 << 20) || written - lastWritten >= (64 << 20))) {
                 lastReport = consumed;
+                lastWritten = written;
                 if (!progress(user, consumed, total)) {
                     snprintf(error, errorSize, "Cancelled");
                     close(fd);

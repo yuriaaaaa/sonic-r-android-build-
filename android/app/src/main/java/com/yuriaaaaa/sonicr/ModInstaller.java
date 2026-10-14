@@ -29,6 +29,8 @@ import java.util.Map;
  */
 final class ModInstaller {
     static final String METADATA = ".gamebanana.json";
+    // Downloads bigger than this are refused (the largest Sonic R mods are well under it).
+    static final long MAX_DOWNLOAD = 4L << 30;
     private static File incomingRoot() {
         return new File(ModManager.MODS, ".incoming");
     }
@@ -141,9 +143,13 @@ final class ModInstaller {
 
     private static Result unpackAndInstall(File archive, String fileName, String title, Installed replace,
                                            JSONObject meta, Progress progress) throws IOException {
-        File incoming = new File(incomingRoot(), String.valueOf(System.nanoTime()));
+        removeStaleIncoming();
+        // Each install unpacks into its own folder and only deletes that, so two installs
+        // at once can't remove each other's files or backups.
+        File work = new File(incomingRoot(), System.nanoTime() + "-" + Thread.currentThread().getId());
+        File incoming = new File(work, "unpacked");
         try {
-            deleteRecursively(incoming);
+            deleteRecursively(work);
             if (!incoming.mkdirs())
                 throw new IOException("Can't write to SonicR/mods. Allow file access in the launcher.");
             if (isArchive(fileName)) {
@@ -151,7 +157,7 @@ final class ModInstaller {
                 ArchiveExtractor.extract(archive, incoming, (done, total) ->
                         progress.update("Unpacking " + fileName + "…", done, total));
             } else {
-                copy(archive, new File(incoming, fileName));
+                copy(archive, new File(incoming, safeName(fileName)));
             }
             if (!containsFile(incoming))
                 throw new IOException("The download is empty");
@@ -163,13 +169,13 @@ final class ModInstaller {
             findModRoots(incoming, 0, roots);
             result.looksLikeMod = !roots.isEmpty();
             if (roots.isEmpty())
-                roots.add(wrapLooseFiles(incoming, title));
+                roots.add(wrapLooseFiles(incoming, title, new File(work, "wrap")));
 
             for (int r = 0; r < roots.size(); r++) {
                 File root = roots.get(r);
                 String name = modName(root, roots.size() == 1 ? title : root.getName());
                 Installed into = (r == 0) ? replace : null;
-                File target = moveIn(root, name, into);
+                File target = moveIn(root, name, into, new File(work, "previous"));
                 if (meta != null)
                     write(new File(target, METADATA), meta.toString());
                 result.folders.add(target);
@@ -184,8 +190,19 @@ final class ModInstaller {
             }
             return result;
         } finally {
-            deleteRecursively(incomingRoot());
+            deleteRecursively(work);
         }
+    }
+
+    /** Clears unpack folders left by an install that was killed part-way (older than a day). */
+    private static void removeStaleIncoming() {
+        File[] left = incomingRoot().listFiles();
+        if (left == null)
+            return;
+        long cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000;
+        for (File f : left)
+            if (f.lastModified() < cutoff)
+                deleteRecursively(f);
     }
 
     /** Folders holding a mod.ini, shallowest first; nothing inside a found mod is searched. */
@@ -211,7 +228,7 @@ final class ModInstaller {
     /**
      * No mod.ini: find a files/ folder, or the game folders themselves, and build a mod around it.
      */
-    private static File wrapLooseFiles(File incoming, String title) throws IOException {
+    private static File wrapLooseFiles(File incoming, String title, File wrapper) throws IOException {
         File filesParent = findFilesFolderParent(incoming, 0);
         if (filesParent != null) {
             writeModIni(filesParent, title);
@@ -220,7 +237,6 @@ final class ModInstaller {
         File gameRoot = findGameRoot(incoming, 0);
         if (gameRoot == null)
             gameRoot = incoming;
-        File wrapper = new File(incomingRoot(), "wrap-" + System.nanoTime());
         File files = new File(wrapper, "files");
         if (!wrapper.mkdirs() || !gameRoot.renameTo(files))
             throw new IOException("Can't set up the mod folder");
@@ -264,7 +280,7 @@ final class ModInstaller {
     }
 
     private static void writeModIni(File folder, String title) throws IOException {
-        write(new File(folder, "mod.ini"), "Name=" + title + "\r\nDescription=Installed without a mod.ini\r\n");
+        write(new File(folder, "mod.ini"), "Name=" + title.replaceAll("[\\r\\n]+", " ") + "\r\nDescription=Installed without a mod.ini\r\n");
     }
 
     /** The mod's Name= from its mod.ini, else the fallback. */
@@ -280,7 +296,7 @@ final class ModInstaller {
     }
 
     /** Moves a mod folder into SonicR/mods, replacing `replace`'s folder if given. */
-    private static File moveIn(File source, String name, Installed replace) throws IOException {
+    private static File moveIn(File source, String name, Installed replace, File backupDir) throws IOException {
         File target;
         if (replace != null && replace.folder != null) {
             target = replace.folder;
@@ -292,7 +308,8 @@ final class ModInstaller {
         }
         File backup = null;
         if (target.exists()) {
-            backup = new File(incomingRoot(), "previous-" + System.nanoTime());
+            backupDir.mkdirs();
+            backup = new File(backupDir, String.valueOf(System.nanoTime()));
             if (!target.renameTo(backup))
                 throw new IOException("Can't replace " + target.getName() + " (is a file in it open?)");
         }
@@ -343,6 +360,8 @@ final class ModInstaller {
             if (code != 200)
                 throw new IOException("The download failed (GameBanana answered " + code + ")");
             long total = connection.getContentLengthLong() > 0 ? connection.getContentLengthLong() : file.size;
+            if (total > MAX_DOWNLOAD)
+                throw new IOException("The download is too big (" + (total >> 20) + " MB)");
             long done = 0, lastReport = 0;
             if (!progress.update("Downloading " + file.name + "…", 0, total))
                 throw new IOException("Cancelled");
@@ -353,6 +372,8 @@ final class ModInstaller {
                     out.write(buffer, 0, n);
                     md5.update(buffer, 0, n);
                     done += n;
+                    if (done > MAX_DOWNLOAD || (total > 0 && done > total))
+                        throw new IOException("The download is bigger than GameBanana said. Try again.");
                     if (done - lastReport >= 256 * 1024 || done == total) {
                         lastReport = done;
                         if (!progress.update("Downloading " + file.name + "…", done, total))
