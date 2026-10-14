@@ -526,12 +526,10 @@ void UpdateLapCounter(int isGameActive)
             _DAT_0068975c = g_totalFrames2;
         }
         else if (g_introCountdown == 3 && g_netReadyFlag == 0) {
-            if (g_totalFrames2 - _DAT_0068975c > 600) {
-                g_netReadyFlag = 1;
-            }
-            if (g_netReadyFlag != 0) {
-                g_introCountdown = 2;
-            }
+            /* NetLevelSyncBarrier guarantees all peers are ready before race loop starts.
+             * Unconditionally advance to prevent 600-frame stall if a legacy keepalive packet was dropped. */
+            g_netReadyFlag = 1;
+            g_introCountdown = 2;
         }
         else if (g_introCountdown < 1) {
             if (g_introTimer != 0) {
@@ -577,11 +575,11 @@ void CheckRaceCompletion(void)
     }
 
     /* player got 5 balloons?
-     * For each player: if field 0x1F4 == 5 (race type complete), set 0x5E = 3 */
-    if (g_raceSubMode == SUBMODE_BALLOON && g_numViewports > 0) {
+     * For each player: if field 0x1F4 >= 5 (race type complete), set 0x5E = 3 */
+    if ((g_raceSubMode == SUBMODE_BALLOON || g_raceSubMode == 3) && g_numViewports > 0) {
         for (int pi = 0; pi < g_numViewports; pi++) {
             Player *p = &g_playerBase[pi];
-            if (p->collisionCount == 5) {
+            if (p->collisionCount >= 5) {
                 p->lapsCompleted = 3;
             }
         }
