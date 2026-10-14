@@ -143,7 +143,7 @@ public class SonicRActivity extends SDLActivity {
         }
     }
 
-    /* Two-finger tap (while the touch controls aren't in use): settings that
+    /* Two-finger tap away from the touch controls: settings that
      * apply straight away, saved for next time too. */
     private void openGameMenu() {
         if ((mMenuDialog != null && mMenuDialog.isShowing())

@@ -191,8 +191,8 @@ public class LauncherActivity extends Activity {
         });
         box.addView(opacity);
         TextView menuHint = new TextView(this);
-        menuHint.setText("In game, tap with two fingers to open the game menu while the touch "
-            + "controls are hidden, switched off, or you're using a controller.");
+        menuHint.setText("In game, tap with two fingers anywhere away from the touch buttons "
+            + "to open the game menu.");
         box.addView(menuHint);
         android.widget.CheckBox vsync = new android.widget.CheckBox(this);
         vsync.setText("VSync (no tearing; off can feel more responsive)");

@@ -21,8 +21,8 @@ import java.util.Set;
  *   D-pad = arrows, A = accelerate, Jump = Space, L/R = Z/X sharp turns,
  *   Look = 1 (look back), Start = Enter, Back = Escape.
  * The top-centre button hides them; a connected controller hides them until
- * the screen is touched again. Whenever they aren't in use (hidden, switched
- * off, or a controller is playing), a two-finger tap opens the game menu.
+ * the screen is touched again. A two-finger tap away from the controls opens
+ * the game menu.
  */
 public class TouchControlsView extends View {
 
@@ -167,6 +167,21 @@ public class TouchControlsView extends View {
         return dx * dx + dy * dy <= r * r;
     }
 
+    /** True if (x, y) is on a control that's currently shown. */
+    private boolean onControl(float x, float y) {
+        if (mDisabled || mGamepadHidden) {
+            return false;
+        }
+        if (inside(mHide, x, y, 1.4f)) {
+            return true;
+        }
+        if (mHidden) {
+            return false;
+        }
+        float dx = x - mPadX, dy = y - mPadY;
+        return dx * dx + dy * dy <= mPadR * mPadR * 1.6f || hitButton(x, y) != NONE;
+    }
+
     private int hitButton(float x, float y) {
         for (int i = 0; i < mButtons.length; i++) {
             if (inside(mButtons[i], x, y, 1.25f)) return i;
@@ -179,12 +194,14 @@ public class TouchControlsView extends View {
         int action = e.getActionMasked();
         int idx = e.getActionIndex();
 
-        // Two-finger tap opens the game menu while the controls aren't in use.
-        boolean inactive = mDisabled || mGamepadHidden || mHidden;
+        // Two-finger tap opens the game menu, but only when both fingers land
+        // away from every on-screen control.
         if (action == MotionEvent.ACTION_DOWN) {
             mMenuGesture = false;
         }
-        if (inactive && action == MotionEvent.ACTION_POINTER_DOWN && e.getPointerCount() == 2) {
+        if (action == MotionEvent.ACTION_POINTER_DOWN && e.getPointerCount() == 2
+                && !onControl(e.getX(0), e.getY(0)) && !onControl(e.getX(1), e.getY(1))) {
+            releaseAll();
             mMenuGesture = true;
             if (mOnMenu != null) {
                 performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
