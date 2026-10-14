@@ -900,6 +900,26 @@ Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeSetStretch(JNIEnv *env, jclass cl
     g_stretchToFill = on ? 1 : 0;
 }
 
+JNIEXPORT void JNICALL
+Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeSetSmooth(JNIEnv *env, jclass cls, jboolean on)
+{
+    extern int g_smoothTextures;   /* the backend notices the change at the next bind */
+    (void)env; (void)cls;
+    g_smoothTextures = on ? 1 : 0;
+}
+
+/* Swap interval has to be set on the GL thread, so it's applied at the next swap. */
+static volatile int s_vsyncDirty;
+
+JNIEXPORT void JNICALL
+Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeSetVsync(JNIEnv *env, jclass cls, jboolean on)
+{
+    extern int g_noVsync;
+    (void)env; (void)cls;
+    g_noVsync = on ? 0 : 1;
+    s_vsyncDirty = 1;
+}
+
 static void count_frame(void)
 {
     Uint32 now = SDL_GetTicks();
@@ -919,6 +939,11 @@ void platform_gl_swap(void)
 {
 #ifdef __ANDROID__
     count_frame();
+    if (s_vsyncDirty) {
+        extern int g_noVsync;
+        s_vsyncDirty = 0;
+        SDL_GL_SetSwapInterval(g_noVsync ? 0 : 1);
+    }
 #endif
     if (g_sdlWindow) {
         SDL_GL_SwapWindow(g_sdlWindow);

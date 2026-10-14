@@ -31,6 +31,8 @@ public class SonicRActivity extends SDLActivity {
     private static native int nativeFpsTenths();
     /** Switches stretch-to-fill while playing (platform_sdl.c). */
     private static native void nativeSetStretch(boolean on);
+    private static native void nativeSetSmooth(boolean on);
+    private static native void nativeSetVsync(boolean on);
 
     private android.widget.TextView mFps;
     private final android.os.Handler mFpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -90,18 +92,21 @@ public class SonicRActivity extends SDLActivity {
     @Override
     protected org.libsdl.app.SDLSurface createSDLSurface(android.content.Context context) {
         org.libsdl.app.SDLSurface surface = super.createSDLSurface(context);
-        int height = getIntent().getIntExtra(EXTRA_RESOLUTION, 0);
-        if (height > 0) {
-            android.util.DisplayMetrics m = new android.util.DisplayMetrics();
-            getWindowManager().getDefaultDisplay().getRealMetrics(m);
-            int longSide = Math.max(m.widthPixels, m.heightPixels);
-            int shortSide = Math.min(m.widthPixels, m.heightPixels);
-            if (height < shortSide) {
-                int width = Math.round(height * (float) longSide / shortSide);
-                surface.getHolder().setFixedSize(width, height);
-            }
-        }
+        applyResolution(surface, getIntent().getIntExtra(EXTRA_RESOLUTION, 0));
         return surface;
+    }
+
+    private void applyResolution(android.view.SurfaceView surface, int height) {
+        android.util.DisplayMetrics m = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(m);
+        int longSide = Math.max(m.widthPixels, m.heightPixels);
+        int shortSide = Math.min(m.widthPixels, m.heightPixels);
+        if (height > 0 && height < shortSide) {
+            int width = Math.round(height * (float) longSide / shortSide);
+            surface.getHolder().setFixedSize(width, height);
+        } else {
+            surface.getHolder().setSizeFromLayout();
+        }
     }
 
     @Override
@@ -153,23 +158,22 @@ public class SonicRActivity extends SDLActivity {
         android.content.SharedPreferences prefs = LauncherActivity.prefs(this);
         setGamePaused(true);
 
+        // A modern theme so switches and sliders draw properly over the game.
+        android.content.Context ui = new android.view.ContextThemeWrapper(this, MENU_THEME);
         float d = getResources().getDisplayMetrics().density;
-        android.widget.LinearLayout box = new android.widget.LinearLayout(this);
+        android.widget.LinearLayout box = new android.widget.LinearLayout(ui);
         box.setOrientation(android.widget.LinearLayout.VERTICAL);
         box.setPadding((int) (20 * d), (int) (8 * d), (int) (20 * d), 0);
 
-        android.widget.Switch touch = new android.widget.Switch(this);
-        touch.setText("Touch controls");
-        touch.setChecked(prefs.getBoolean(LauncherActivity.KEY_TOUCH, true));
-        touch.setOnCheckedChangeListener((b, on) -> {
+        box.addView(menuSwitch(ui, "Touch controls", prefs.getBoolean(LauncherActivity.KEY_TOUCH, true), on -> {
             prefs.edit().putBoolean(LauncherActivity.KEY_TOUCH, on).apply();
             mTouch.setEnabledControls(on);
-        });
-        box.addView(touch);
+        }));
 
-        android.widget.TextView opacityLabel = new android.widget.TextView(this);
+        android.widget.TextView opacityLabel = new android.widget.TextView(ui);
+        opacityLabel.setPadding(0, (int) (8 * d), 0, 0);
         box.addView(opacityLabel);
-        android.widget.SeekBar opacity = new android.widget.SeekBar(this);
+        android.widget.SeekBar opacity = new android.widget.SeekBar(ui);
         opacity.setMax(80);   // 20% to 100%
         int current = prefs.getInt(LauncherActivity.KEY_TOUCH_OPACITY, 100);
         opacity.setProgress(current - 20);
@@ -187,32 +191,58 @@ public class SonicRActivity extends SDLActivity {
         });
         box.addView(opacity);
 
-        android.widget.Switch stretch = new android.widget.Switch(this);
-        stretch.setText("Stretch to fill (16:9)");
-        stretch.setChecked(prefs.getBoolean(LauncherActivity.KEY_STRETCH, false));
-        stretch.setOnCheckedChangeListener((b, on) -> {
+        android.widget.TextView resLabel = new android.widget.TextView(ui);
+        resLabel.setText("Resolution");
+        resLabel.setPadding(0, (int) (8 * d), 0, 0);
+        box.addView(resLabel);
+        final int[] heights = { 0, 1080, 720, 480 };
+        final String[] resNames = { "Native", "1080p", "720p", "480p" };
+        android.widget.RadioGroup res = new android.widget.RadioGroup(ui);
+        res.setOrientation(android.widget.RadioGroup.HORIZONTAL);
+        int resNow = prefs.getInt(LauncherActivity.KEY_RESOLUTION, 0);
+        for (int i = 0; i < heights.length; i++) {
+            android.widget.RadioButton rb = new android.widget.RadioButton(ui);
+            rb.setId(i + 1);
+            rb.setText(resNames[i]);
+            res.addView(rb);
+            if (heights[i] == resNow) {
+                res.check(i + 1);
+            }
+        }
+        res.setOnCheckedChangeListener((g, id) -> {
+            int h = heights[Math.max(0, id - 1)];
+            prefs.edit().putInt(LauncherActivity.KEY_RESOLUTION, h).apply();
+            if (mSurface != null) {
+                applyResolution(mSurface, h);
+            }
+        });
+        box.addView(res);
+
+        box.addView(menuSwitch(ui, "Stretch to fill (16:9)", prefs.getBoolean(LauncherActivity.KEY_STRETCH, false), on -> {
             prefs.edit().putBoolean(LauncherActivity.KEY_STRETCH, on).apply();
             nativeSetStretch(on);
-        });
-        box.addView(stretch);
-
-        android.widget.Switch fps = new android.widget.Switch(this);
-        fps.setText("Show FPS counter");
-        fps.setChecked(mFps.getVisibility() == android.view.View.VISIBLE);
-        fps.setOnCheckedChangeListener((b, on) -> {
+        }));
+        box.addView(menuSwitch(ui, "Smooth textures", prefs.getBoolean(LauncherActivity.KEY_SMOOTH, false), on -> {
+            prefs.edit().putBoolean(LauncherActivity.KEY_SMOOTH, on).apply();
+            nativeSetSmooth(on);
+        }));
+        box.addView(menuSwitch(ui, "VSync", prefs.getBoolean(LauncherActivity.KEY_VSYNC, true), on -> {
+            prefs.edit().putBoolean(LauncherActivity.KEY_VSYNC, on).apply();
+            nativeSetVsync(on);
+        }));
+        box.addView(menuSwitch(ui, "Show FPS counter", mFps.getVisibility() == android.view.View.VISIBLE, on -> {
             prefs.edit().putBoolean(LauncherActivity.KEY_FPS, on).apply();
             showFps(on);
-        });
-        box.addView(fps);
+        }));
 
-        android.widget.TextView note = new android.widget.TextView(this);
-        note.setText("Resolution, anti-aliasing, smooth textures and VSync are in the launcher's Settings.");
+        android.widget.TextView note = new android.widget.TextView(ui);
+        note.setText("Anti-aliasing needs a restart, so it's only in the launcher's Settings.");
         note.setPadding(0, (int) (10 * d), 0, 0);
         box.addView(note);
 
-        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        android.widget.ScrollView scroll = new android.widget.ScrollView(ui);
         scroll.addView(box);
-        mMenuDialog = new AlertDialog.Builder(this)
+        mMenuDialog = new AlertDialog.Builder(this, MENU_THEME)
             .setTitle("Game menu")
             .setView(scroll)
             .setOnCancelListener(dlg -> setGamePaused(false))
@@ -221,7 +251,38 @@ public class SonicRActivity extends SDLActivity {
                 mMenuDialog.dismiss();
                 askToQuit();
             })
-            .show();
+            .create();
+        showImmersive(mMenuDialog);
+    }
+
+    private static final int MENU_THEME = android.R.style.Theme_DeviceDefault_Dialog_Alert;
+
+    private android.widget.Switch menuSwitch(android.content.Context ui, String label, boolean on,
+                                             java.util.function.Consumer<Boolean> change) {
+        android.widget.Switch sw = new android.widget.Switch(ui);
+        sw.setText(label);
+        sw.setChecked(on);
+        sw.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+        int pad = (int) (6 * getResources().getDisplayMetrics().density);
+        sw.setPadding(0, pad, 0, pad);
+        sw.setOnCheckedChangeListener((b, v) -> change.accept(v));
+        return sw;
+    }
+
+    /* Shows a dialog without bringing back the status and navigation bars:
+     * it starts unfocusable with the game's full-screen flags, then takes focus. */
+    @SuppressWarnings("deprecation")
+    private void showImmersive(AlertDialog dialog) {
+        android.view.Window w = dialog.getWindow();
+        if (w == null) {
+            dialog.show();
+            return;
+        }
+        w.setFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        w.getDecorView().setSystemUiVisibility(getWindow().getDecorView().getSystemUiVisibility());
+        dialog.show();
+        w.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
     }
 
     /* A real controller hides the touch controls until the screen is touched.
@@ -252,14 +313,15 @@ public class SonicRActivity extends SDLActivity {
             return;
         }
         setGamePaused(true);
-        mQuitDialog = new AlertDialog.Builder(this)
+        mQuitDialog = new AlertDialog.Builder(this, MENU_THEME)
             .setTitle("Quit Sonic R?")
             .setMessage("Are you sure you want to quit? Any unsaved progress will be lost.")
             .setCancelable(true)
             .setOnCancelListener(d -> setGamePaused(false))
             .setPositiveButton("Continue", (d, w) -> setGamePaused(false))
             .setNegativeButton("Exit game", (d, w) -> exitToLauncher())
-            .show();
+            .create();
+        showImmersive(mQuitDialog);
     }
 
     /* Goes through SDL's own state machine so the pause isn't counted twice if

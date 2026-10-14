@@ -275,6 +275,13 @@ void R_GLES2_InvalidateBinding(void)
 
 static void BindForBatch(int tp)
 {
+    /* --smooth can be switched while playing; re-apply every page's filter. */
+    extern int g_smoothTextures;
+    static int s_lastSmooth = -1;
+    if (g_smoothTextures != s_lastSmooth) {
+        s_lastSmooth = g_smoothTextures;
+        memset(s_glTextureFilter, 0, sizeof(s_glTextureFilter));
+    }
     GLuint name = s_glTextures[tp];
     if (s_boundTex != name) {
         glBindTexture(GL_TEXTURE_2D, name);
@@ -285,7 +292,6 @@ static void BindForBatch(int tp)
         want = (unsigned char)(s_current.filter + 1);
     }
     if (s_glTextureFilter[tp] != want) {
-        extern int g_smoothTextures; /* main.c, --smooth */
         GLenum f = (g_smoothTextures || want == (unsigned char)(R_FILTER_LINEAR + 1))
                        ? GL_LINEAR : GL_NEAREST;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
