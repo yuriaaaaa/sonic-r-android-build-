@@ -115,10 +115,29 @@ public class SDLControllerManager
         }
         */
 
-        return ((sources & InputDevice.SOURCE_CLASS_JOYSTICK) != 0 ||
+        boolean candidate = ((sources & InputDevice.SOURCE_CLASS_JOYSTICK) != 0 ||
                 ((sources & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD) ||
                 ((sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD)
         );
+        return candidate && looksLikeController(device);
+    }
+
+    /* Sonic R: Bluetooth headphones and remotes ("... Consumer Control") can
+     * report gamepad or d-pad sources for their media buttons and would take
+     * player 1's slot. A real controller has analog sticks or face buttons. */
+    public static boolean looksLikeController(InputDevice device) {
+        String name = device.getName() == null ? "" : device.getName().toLowerCase(java.util.Locale.ROOT);
+        if (name.contains("consumer control") || name.contains("headset")
+                || name.contains("headphone") || name.contains("earbud")
+                || name.contains("avrcp")) {
+            return false;
+        }
+        if ((device.getSources() & InputDevice.SOURCE_CLASS_JOYSTICK) != 0) {
+            return true;
+        }
+        boolean[] has = device.hasKeys(KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B,
+                KeyEvent.KEYCODE_BUTTON_START);
+        return has[0] || has[1] || has[2];
     }
 
 }

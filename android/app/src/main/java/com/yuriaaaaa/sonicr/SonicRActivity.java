@@ -134,7 +134,7 @@ public class SonicRActivity extends SDLActivity {
      * reaches the game as Escape. */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        boolean pad = isGamepad(event.getSource());
+        boolean pad = isGamepad(event);
         if (mTouch != null && pad) {
             mTouch.hideForGamepad();
         }
@@ -243,14 +243,17 @@ public class SonicRActivity extends SDLActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (mTouch != null && isGamepad(event.getSource())) {
+        if (mTouch != null && isGamepad(event)) {
             mTouch.hideForGamepad();
         }
         return super.dispatchGenericMotionEvent(event);
     }
 
-    private static boolean isGamepad(int source) {
-        return (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+    private static boolean isGamepad(android.view.InputEvent event) {
+        int source = event.getSource();
+        boolean pad = (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
             || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        InputDevice device = event.getDevice();
+        return pad && device != null && org.libsdl.app.SDLControllerManager.looksLikeController(device);
     }
 }
