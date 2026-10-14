@@ -328,7 +328,10 @@ public class LauncherActivity extends Activity {
         hub.setSingleLine(true);
         hub.setHint("Hub address (blank to host on this phone)");
         hub.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        hub.setText(prefs.getString(KEY_NET_HUB, Netplay.DEFAULT_HUB));
+        // An empty saved box means "host on this phone" for that one tap; reopening
+        // the dialog brings back the shared hub so finding rooms just works.
+        String savedHub = prefs.getString(KEY_NET_HUB, "");
+        hub.setText(savedHub.isEmpty() ? Netplay.DEFAULT_HUB : savedHub);
         box.addView(hub);
         LinearLayout onlineRow = new LinearLayout(this);
         onlineRow.setOrientation(LinearLayout.HORIZONTAL);
