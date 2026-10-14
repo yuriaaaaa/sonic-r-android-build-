@@ -289,6 +289,46 @@ public class LauncherActivity extends Activity {
             + "Your address on this network: " + localAddresses());
         box.addView(how);
 
+        // Over the internet: Tailscale puts both phones on one private network. Hosts
+        // can't be found automatically there, so the joiner enters the host's Tailscale IP.
+        TextView tsTitle = new TextView(this);
+        tsTitle.setText("Online with Tailscale");
+        tsTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        tsTitle.setPadding(0, dp(14), 0, dp(4));
+        box.addView(tsTitle);
+        String tsIp = tailscaleAddress();
+        boolean tsInstalled = getPackageManager().getLaunchIntentForPackage(TAILSCALE_PACKAGE) != null;
+        TextView ts = new TextView(this);
+        ts.setText((tsIp != null
+                ? "Tailscale is on. Your Tailscale IP: " + tsIp + "\n\n"
+                : tsInstalled ? "Tailscale is installed but not connected.\n\n"
+                              : "Play with friends anywhere using the free Tailscale app.\n\n")
+            + "1. Both players install Tailscale and sign in to the same account, or the host "
+            + "shares their phone with the other player from Tailscale.\n"
+            + "2. The host starts a game and sends their Tailscale IP.\n"
+            + "3. The other player types it under \"Join a host by IP\" below, then joins.");
+        box.addView(ts);
+        LinearLayout tsRow = new LinearLayout(this);
+        tsRow.setOrientation(LinearLayout.HORIZONTAL);
+        if (tsIp != null) {
+            android.widget.Button copy = new android.widget.Button(this);
+            copy.setText("Copy my IP");
+            copy.setAllCaps(false);
+            copy.setOnClickListener(v -> {
+                android.content.ClipboardManager cm =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("Tailscale IP", tsIp));
+                android.widget.Toast.makeText(this, "Copied " + tsIp, android.widget.Toast.LENGTH_SHORT).show();
+            });
+            tsRow.addView(copy);
+        }
+        android.widget.Button openTs = new android.widget.Button(this);
+        openTs.setText(tsInstalled ? "Open Tailscale" : "Get Tailscale");
+        openTs.setAllCaps(false);
+        openTs.setOnClickListener(v -> openTailscale());
+        tsRow.addView(openTs);
+        box.addView(tsRow);
+
         TextView nameLabel = new TextView(this);
         nameLabel.setText("Your player name");
         nameLabel.setPadding(0, dp(12), 0, 0);
@@ -305,7 +345,7 @@ public class LauncherActivity extends Activity {
         box.addView(hostLabel);
         android.widget.EditText host = new android.widget.EditText(this);
         host.setSingleLine(true);
-        host.setHint("e.g. 192.168.1.20");
+        host.setHint("e.g. 192.168.1.20 or 100.101.102.103");
         host.setInputType(android.text.InputType.TYPE_CLASS_PHONE);
         host.setText(prefs.getString(KEY_NET_HOST, ""));
         box.addView(host);
@@ -323,6 +363,44 @@ public class LauncherActivity extends Activity {
             .show();
     }
 
+    static final String TAILSCALE_PACKAGE = "com.tailscale.ipn";
+
+    private static boolean isTailscale(java.net.InetAddress a) {
+        byte[] b = a.getAddress();
+        // Tailscale hands out 100.64.0.0/10 (carrier-grade NAT range) addresses.
+        return b.length == 4 && (b[0] & 0xFF) == 100 && (b[1] & 0xC0) == 64;
+    }
+
+    /** This phone's Tailscale IPv4 address, or null when Tailscale isn't connected. */
+    private static String tailscaleAddress() {
+        try {
+            for (java.net.NetworkInterface ni : java.util.Collections.list(
+                    java.net.NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || !ni.getName().startsWith("tun")) continue;
+                for (java.net.InetAddress a : java.util.Collections.list(ni.getInetAddresses()))
+                    if (a instanceof java.net.Inet4Address && isTailscale(a))
+                        return a.getHostAddress();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private void openTailscale() {
+        android.content.Intent launch = getPackageManager().getLaunchIntentForPackage(TAILSCALE_PACKAGE);
+        if (launch != null) {
+            startActivity(launch);
+            return;
+        }
+        try {
+            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("market://details?id=" + TAILSCALE_PACKAGE)));
+        } catch (android.content.ActivityNotFoundException e) {
+            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://tailscale.com/download/android")));
+        }
+    }
+
     private static String localAddresses() {
         StringBuilder sb = new StringBuilder();
         try {
@@ -334,6 +412,8 @@ public class LauncherActivity extends Activity {
                         String n = ni.getName();
                         // Mobile data addresses can't be reached from the Wi-Fi.
                         if (n.startsWith("rmnet") || n.startsWith("ccmni")) continue;
+                        // VPNs (Tailscale is shown separately) aren't on the Wi-Fi either.
+                        if (n.startsWith("tun") || isTailscale(a)) continue;
                         if (sb.length() > 0) sb.append(", ");
                         sb.append(a.getHostAddress());
                         if (n.startsWith("ap") || n.startsWith("swlan") || n.contains("softap"))

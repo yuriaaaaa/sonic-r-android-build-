@@ -76,6 +76,13 @@ touch the screen.
   joins; hosts are found automatically. **Multiplayer** in the launcher shows
   your address, sets your player name, and can join a host by IP when
   automatic discovery is blocked.
+- **Online with Tailscale:** install the free [Tailscale](https://tailscale.com/download/android)
+  app on both phones and put them on the same tailnet (same account, or the host
+  shares their device). The host starts a game and sends their Tailscale IP
+  (100.x.y.z, shown with a Copy button under **Multiplayer**); the other player
+  enters it under "Join a host by IP". Discovery doesn't work over Tailscale, so
+  the IP is needed. Tailscale is used as a separate app: Android allows one VPN at
+  a time, and Tailscale needs its own sign-in.
 
 ## Settings
 
