@@ -6,6 +6,9 @@
  * See TickPlayerAnimation_annotated.c for full documentation.
  */
 
+#ifdef SONICR_MODS
+#include "mods.h"
+#endif
 #include "sonicr_types.h"
 #include "sonicr_globals.h"
 #include "sonicr_functions.h"
@@ -770,6 +773,13 @@ void DispatchFaceUVAnimation(Player *player)
     if (charId < 0 || charId >= CHAR_COUNT) {
         return;
     }
+
+#ifdef SONICR_MODS
+    /* A mod's "Disable Blinking" code: leave the model's own face UVs alone. */
+    if (Mods_NoBlink()) {
+        return;
+    }
+#endif
 
     unsigned char flags = ((unsigned char *)&player->renderState)[2];
 

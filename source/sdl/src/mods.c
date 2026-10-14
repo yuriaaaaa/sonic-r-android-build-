@@ -13,8 +13,10 @@
  * .png/.gif/.bmp next to a .RAW texture's path replaces the texture (it is
  * converted to the RAW's own size and cached under mods/.cache).
  *
- * Not supported, because they patch the original SONICR.EXE: DLLFile mods
- * and Codes.lst / Patches.dat cheat codes.
+ * Codes (mod.ini Codes=<file>, or Codes.lst) patch addresses in the original
+ * SONICR.EXE, which this engine doesn't have. Known codes are recognised and
+ * mapped onto the engine instead (see s_knownCodes); the rest are logged and
+ * ignored. DLLFile mods can't load at all.
  */
 #ifdef SONICR_MODS
 
@@ -295,8 +297,73 @@ static void LoaderIniFn(void *ctx, const char *group, const char *key, const cha
 
 typedef struct {
     char name[256];
+    char codes[256];
     int hasDll;
 } ModInfo;
+
+/* ---- Codes ----
+ * A codes file is a list of blocks:
+ *   Code "Disable Blinking" Required
+ *   write8 00428CB0 195
+ * Each known code is matched by one of its writes (address + value). */
+static int s_noBlink;
+
+typedef struct {
+    unsigned addr;
+    unsigned value;
+    int *flag;
+    const char *what;
+} KnownCode;
+
+static const KnownCode s_knownCodes[] = {
+    /* RET at the start of the two face-animation routines: characters stop
+     * blinking, so models from mods don't get the original eye UVs. */
+    { 0x00428CB0, 0xC3, &s_noBlink, "disable blinking" },
+    { 0x00428D40, 0xC3, &s_noBlink, "disable blinking" },
+};
+
+static void ApplyCodes(const char *path, const char *modName)
+{
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        return;
+    }
+    char line[512], code[256] = "";
+    int matched = 0, unknown = 0;
+    while (fgets(line, sizeof(line), f)) {
+        char *t = Trim(line);
+        if (strncasecmp(t, "Code ", 5) == 0 || strncasecmp(t, "Patch ", 6) == 0) {
+            if (code[0] && !matched) unknown++;
+            snprintf(code, sizeof(code), "%s", t);
+            matched = 0;
+            continue;
+        }
+        char op[32];
+        unsigned addr, value;
+        if (sscanf(t, "%31s %x %i", op, &addr, (int *)&value) == 3 && strncasecmp(op, "write", 5) == 0) {
+            for (size_t i = 0; i < sizeof(s_knownCodes) / sizeof(s_knownCodes[0]); i++) {
+                if (s_knownCodes[i].addr == addr && s_knownCodes[i].value == value) {
+                    if (!*s_knownCodes[i].flag) {
+                        ModLog("   %s: code %s -> %s", modName, code, s_knownCodes[i].what);
+                    }
+                    *s_knownCodes[i].flag = 1;
+                    matched = 1;
+                }
+            }
+        }
+    }
+    if (code[0] && !matched) unknown++;
+    fclose(f);
+    if (unknown) {
+        ModLog("   %s: %d code(s) in %s aren't supported on Android and are ignored",
+               modName, unknown, path);
+    }
+}
+
+int Mods_NoBlink(void)
+{
+    return s_noBlink;
+}
 
 static void ModIniFn(void *ctx, const char *group, const char *key, const char *value)
 {
@@ -307,6 +374,9 @@ static void ModIniFn(void *ctx, const char *group, const char *key, const char *
         }
         else if (strcasecmp(key, "DLLFile") == 0 && value[0]) {
             info->hasDll = 1;
+        }
+        else if (strcasecmp(key, "Codes") == 0 && value[0]) {
+            snprintf(info->codes, sizeof(info->codes), "%s", value);
         }
     }
     else if (strcasecmp(group, "IgnoreFiles") == 0) {
@@ -412,11 +482,13 @@ void Mods_Init(void)
             files = ScanFolder(filesDir, strlen(filesDir) + 1);
         }
 
+        ModLog("%d. %s: %d files%s", n, info.name, files,
+               info.hasDll ? " (its DLL can't load on Android)" : "");
         char codes[640];
-        int hasCodes = FindChild(modDir, "Codes.lst", codes, sizeof(codes));
-        ModLog("%d. %s: %d files%s%s", n, info.name, files,
-               info.hasDll ? " (its DLL can't load on Android)" : "",
-               hasCodes ? " (its Codes.lst is ignored)" : "");
+        if ((info.codes[0] && FindChild(modDir, info.codes, codes, sizeof(codes)))
+                || FindChild(modDir, "Codes.lst", codes, sizeof(codes))) {
+            ApplyCodes(codes, info.name);
+        }
         s_modsLoaded++;
     }
 

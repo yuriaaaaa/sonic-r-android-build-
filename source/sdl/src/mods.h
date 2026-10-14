@@ -24,4 +24,7 @@ const char *Mods_Resolve(const char *path);
 /* A mod's file for CD track `track`, any format. Returns 1 if found. */
 int Mods_FindMusic(int track, char *out, size_t n);
 
+/* Non-zero when an enabled mod's codes turn off character blinking. */
+int Mods_NoBlink(void);
+
 #endif /* SONICR_MODS_H */

@@ -41,7 +41,7 @@ enabled list in `mods/SonicRModLoader.ini`.
 - **Get mods** browses GameBanana, and GameBanana's 1-click install opens the
   app directly.
 - Textures (`.png`, `.gif`, `.bmp`) replace `.RAW` files; `music/trackN` in
-  any format replaces that track. DLL mods and `Codes.lst` cheats are Windows-only.
+  any format replaces that track. DLL mods are Windows-only. Codes files are read and known codes (such as "Disable Blinking", used by character model mods) are applied; others are ignored.
 - The loader logs to `mods/ModLoader-android.log`.
 
 ## Controls

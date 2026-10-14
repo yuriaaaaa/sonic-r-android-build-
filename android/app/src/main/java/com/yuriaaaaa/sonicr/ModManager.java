@@ -129,6 +129,7 @@ final class ModManager {
         mod.title = dir.getName();
         String group = "";
         String dll = "";
+        String codes = "";
         for (String line : readLines(ini)) {
             String t = line.trim();
             if (t.startsWith("[") && t.endsWith("]")) {
@@ -144,12 +145,14 @@ final class ModManager {
             else if (key.equalsIgnoreCase("Version")) mod.version = value;
             else if (key.equalsIgnoreCase("Description")) mod.description = value.replace("\\n", "\n");
             else if (key.equalsIgnoreCase("DLLFile")) dll = value;
+            else if (key.equalsIgnoreCase("Codes")) codes = value;
         }
         if (!dll.isEmpty())
             mod.notes.add("Has a Windows DLL (" + dll + "), which can't run on Android. Its files still "
                     + "apply, but parts of the mod may be missing.");
-        if (child(dir, "Codes.lst") != null)
-            mod.notes.add("Has cheat codes (Codes.lst) for the Windows exe; they're ignored here.");
+        if ((!codes.isEmpty() && child(dir, codes) != null) || child(dir, "Codes.lst") != null)
+            mod.notes.add("Has codes for the Windows exe. Known ones (like Disable Blinking) are "
+                    + "applied; the rest are ignored here (see mods/ModLoader-android.log).");
         if (child(dir, "files") == null && dll.isEmpty())
             mod.notes.add("Has no files folder, so it changes nothing.");
         return mod;
