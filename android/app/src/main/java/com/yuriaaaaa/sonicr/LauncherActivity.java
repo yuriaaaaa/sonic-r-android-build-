@@ -118,26 +118,89 @@ public class LauncherActivity extends Activity {
         }
         Intent i = new Intent(this, SonicRActivity.class);
         i.putExtra(SonicRActivity.EXTRA_DATA_DIR, mData.getAbsolutePath());
-        i.putExtra(SonicRActivity.EXTRA_STRETCH,
-            getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_STRETCH, false));
+        android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        i.putExtra(SonicRActivity.EXTRA_STRETCH, prefs.getBoolean(KEY_STRETCH, false));
+        i.putExtra(SonicRActivity.EXTRA_RESOLUTION, prefs.getInt(KEY_RESOLUTION, 0));
+        i.putExtra(SonicRActivity.EXTRA_MSAA, prefs.getInt(KEY_MSAA, 0));
+        i.putExtra(SonicRActivity.EXTRA_SMOOTH, prefs.getBoolean(KEY_SMOOTH, false));
         startActivity(i);
     }
 
     static final String PREFS = "settings";
     static final String KEY_STRETCH = "stretch";
+    static final String KEY_RESOLUTION = "resolution"; // render height, 0 = native
+    static final String KEY_MSAA = "msaa";
+    static final String KEY_SMOOTH = "smooth";
 
     private void showSettings() {
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String[] modes = { "4:3 (original, black bars)", "Stretch to fill (16:9)" };
-        int current = prefs.getBoolean(KEY_STRETCH, false) ? 1 : 0;
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        box.setPadding(pad, dp(8), pad, 0);
+
+        android.widget.RadioGroup screen = choices(box, "Screen",
+            new String[] { "4:3 (original, black bars)", "Stretch to fill (16:9)" },
+            prefs.getBoolean(KEY_STRETCH, false) ? 1 : 0);
+        int[] heights = { 0, 1080, 720, 480 };
+        android.widget.RadioGroup res = choices(box, "Resolution",
+            new String[] { "Native (sharpest)", "1080p", "720p (faster)", "480p (original look)" },
+            indexOf(heights, prefs.getInt(KEY_RESOLUTION, 0)));
+        int[] samples = { 0, 2, 4 };
+        android.widget.RadioGroup aa = choices(box, "Anti-aliasing (smooths jagged edges)",
+            new String[] { "Off", "2x", "4x" },
+            indexOf(samples, prefs.getInt(KEY_MSAA, 0)));
+        android.widget.CheckBox smooth = new android.widget.CheckBox(this);
+        smooth.setText("Smooth textures (bilinear filtering)");
+        smooth.setChecked(prefs.getBoolean(KEY_SMOOTH, false));
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sp.topMargin = dp(12);
+        box.addView(smooth, sp);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Screen")
-            .setSingleChoiceItems(modes, current, (d, which) -> {
-                prefs.edit().putBoolean(KEY_STRETCH, which == 1).apply();
-                d.dismiss();
-            })
-            .setNegativeButton("Close", null)
+            .setTitle("Settings")
+            .setView(scroll)
+            .setPositiveButton("Save", (d, w) -> prefs.edit()
+                .putBoolean(KEY_STRETCH, checkedIndex(screen) == 1)
+                .putInt(KEY_RESOLUTION, heights[checkedIndex(res)])
+                .putInt(KEY_MSAA, samples[checkedIndex(aa)])
+                .putBoolean(KEY_SMOOTH, smooth.isChecked())
+                .apply())
+            .setNegativeButton("Cancel", null)
             .show();
+    }
+
+    private android.widget.RadioGroup choices(LinearLayout box, String title, String[] labels, int checked) {
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        t.setTypeface(null, android.graphics.Typeface.BOLD);
+        t.setPadding(0, dp(12), 0, dp(2));
+        box.addView(t);
+        android.widget.RadioGroup group = new android.widget.RadioGroup(this);
+        for (int i = 0; i < labels.length; i++) {
+            android.widget.RadioButton b = new android.widget.RadioButton(this);
+            b.setId(i + 1);
+            b.setText(labels[i]);
+            group.addView(b);
+        }
+        group.check(checked + 1);
+        box.addView(group);
+        return group;
+    }
+
+    private static int checkedIndex(android.widget.RadioGroup group) {
+        return Math.max(0, group.getCheckedRadioButtonId() - 1);
+    }
+
+    private static int indexOf(int[] values, int v) {
+        for (int i = 0; i < values.length; i++)
+            if (values[i] == v)
+                return i;
+        return 0;
     }
 
     private void showMenu(boolean ready) {

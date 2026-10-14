@@ -522,6 +522,10 @@ void PostRaceHandling2P(void)
 
 /* --stretch: render_gl.c fills the whole screen instead of keeping 4:3. */
 int g_stretchToFill = 0;
+/* --msaa N: multisample anti-aliasing samples (platform_sdl.c). */
+int g_msaaSamples = 0;
+/* --smooth: bilinear filtering on every texture (r_gles2_backend.c). */
+int g_smoothTextures = 0;
 
 /* WinMain @ 0x004CDFC4 — 8254 bytes */
 int main(int argc, char *argv[])
@@ -536,6 +540,8 @@ int main(int argc, char *argv[])
         {"fullscreen", no_argument, NULL, 'f'},
         {"username", required_argument, NULL, 'n'},
         {"stretch", no_argument, NULL, 's'},
+        {"msaa", required_argument, NULL, 'm'},
+        {"smooth", no_argument, NULL, 'l'},
         {NULL, 0, NULL, 0}};
     int opt;
     while ((opt = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
@@ -557,6 +563,12 @@ int main(int argc, char *argv[])
                 break;
             case 's':
                 g_stretchToFill = 1;
+                break;
+            case 'm':
+                g_msaaSamples = atoi(optarg);
+                break;
+            case 'l':
+                g_smoothTextures = 1;
                 break;
             case 'n':
                 strncpy(s_cmdUsername, optarg, sizeof(s_cmdUsername) - 1);

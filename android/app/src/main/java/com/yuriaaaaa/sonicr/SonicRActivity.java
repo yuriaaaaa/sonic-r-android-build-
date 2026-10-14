@@ -16,6 +16,9 @@ public class SonicRActivity extends SDLActivity {
 
     static final String EXTRA_DATA_DIR = "dataDir";
     static final String EXTRA_STRETCH = "stretch";
+    static final String EXTRA_RESOLUTION = "resolution";
+    static final String EXTRA_MSAA = "msaa";
+    static final String EXTRA_SMOOTH = "smooth";
 
     private TouchControlsView mTouch;
     private AlertDialog mQuitDialog;
@@ -32,11 +35,38 @@ public class SonicRActivity extends SDLActivity {
         if (getIntent().getBooleanExtra(EXTRA_STRETCH, false)) {
             args.add("--stretch");
         }
+        int msaa = getIntent().getIntExtra(EXTRA_MSAA, 0);
+        if (msaa > 0) {
+            args.add("--msaa");
+            args.add(Integer.toString(msaa));
+        }
+        if (getIntent().getBooleanExtra(EXTRA_SMOOTH, false)) {
+            args.add("--smooth");
+        }
         String dir = getIntent().getStringExtra(EXTRA_DATA_DIR);
         if (dir != null) {
             args.add(dir);
         }
         return args.toArray(new String[0]);
+    }
+
+    /* Resolution setting: render at a fixed height and let the display
+     * hardware scale it to the screen. 0 keeps the native resolution. */
+    @Override
+    protected org.libsdl.app.SDLSurface createSDLSurface(android.content.Context context) {
+        org.libsdl.app.SDLSurface surface = super.createSDLSurface(context);
+        int height = getIntent().getIntExtra(EXTRA_RESOLUTION, 0);
+        if (height > 0) {
+            android.util.DisplayMetrics m = new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(m);
+            int longSide = Math.max(m.widthPixels, m.heightPixels);
+            int shortSide = Math.min(m.widthPixels, m.heightPixels);
+            if (height < shortSide) {
+                int width = Math.round(height * (float) longSide / shortSide);
+                surface.getHolder().setFixedSize(width, height);
+            }
+        }
+        return surface;
     }
 
     @Override

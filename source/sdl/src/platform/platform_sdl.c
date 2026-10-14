@@ -480,11 +480,29 @@ int platform_init(int width, int height, int fullscreen, const char *title)
     if (fullscreen) {
         winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     }
+    extern int g_msaaSamples;
+    if (g_msaaSamples > 0) {
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, g_msaaSamples);
+    }
     g_sdlWindow = SDL_CreateWindow(
         title,
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         width, height,
         winFlags);
+    if (!g_sdlWindow && g_msaaSamples > 0) {
+        /* No multisampled config on this GPU; carry on without it. */
+        fprintf(stderr, "No %dx MSAA (%s); continuing without it\n",
+                g_msaaSamples, SDL_GetError());
+        g_msaaSamples = 0;
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        g_sdlWindow = SDL_CreateWindow(
+            title,
+            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+            width, height,
+            winFlags);
+    }
     if (!g_sdlWindow) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         return -1;

@@ -285,8 +285,9 @@ static void BindForBatch(int tp)
         want = (unsigned char)(s_current.filter + 1);
     }
     if (s_glTextureFilter[tp] != want) {
-        GLenum f = (want == (unsigned char)(R_FILTER_LINEAR + 1)) ? GL_LINEAR
-                                                                  : GL_NEAREST;
+        extern int g_smoothTextures; /* main.c, --smooth */
+        GLenum f = (g_smoothTextures || want == (unsigned char)(R_FILTER_LINEAR + 1))
+                       ? GL_LINEAR : GL_NEAREST;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
         s_glTextureFilter[tp] = want;
