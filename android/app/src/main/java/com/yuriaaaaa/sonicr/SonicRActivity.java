@@ -19,6 +19,22 @@ public class SonicRActivity extends SDLActivity {
     static final String EXTRA_RESOLUTION = "resolution";
     static final String EXTRA_MSAA = "msaa";
     static final String EXTRA_SMOOTH = "smooth";
+    static final String EXTRA_VSYNC = "vsync";
+    static final String EXTRA_FPS = "fps";
+
+    /** Frames per second times ten, counted at each buffer swap (platform_sdl.c). */
+    private static native int nativeFpsTenths();
+
+    private android.widget.TextView mFps;
+    private final android.os.Handler mFpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable mFpsTick = new Runnable() {
+        @Override
+        public void run() {
+            int t = nativeFpsTenths();
+            mFps.setText(t > 0 ? (t / 10) + " FPS" : "-- FPS");
+            mFpsHandler.postDelayed(this, 500);
+        }
+    };
 
     private TouchControlsView mTouch;
     private AlertDialog mQuitDialog;
@@ -42,6 +58,9 @@ public class SonicRActivity extends SDLActivity {
         }
         if (getIntent().getBooleanExtra(EXTRA_SMOOTH, false)) {
             args.add("--smooth");
+        }
+        if (!getIntent().getBooleanExtra(EXTRA_VSYNC, true)) {
+            args.add("--novsync");
         }
         String dir = getIntent().getStringExtra(EXTRA_DATA_DIR);
         if (dir != null) {
@@ -79,6 +98,21 @@ public class SonicRActivity extends SDLActivity {
         mTouch = new TouchControlsView(this);
         mLayout.addView(mTouch, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (getIntent().getBooleanExtra(EXTRA_FPS, false)) {
+            mFps = new android.widget.TextView(this);
+            mFps.setTextColor(android.graphics.Color.WHITE);
+            mFps.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14);
+            mFps.setBackgroundColor(android.graphics.Color.argb(140, 0, 0, 0));
+            int p = (int) (6 * getResources().getDisplayMetrics().density);
+            mFps.setPadding(p, p / 2, p, p / 2);
+            android.widget.RelativeLayout.LayoutParams lp = new android.widget.RelativeLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
+            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
+            lp.setMargins(p, p, 0, 0);
+            mLayout.addView(mFps, lp);
+            mFpsHandler.post(mFpsTick);
+        }
     }
 
     /* A real controller hides the touch controls until the screen is touched.

@@ -123,6 +123,8 @@ public class LauncherActivity extends Activity {
         i.putExtra(SonicRActivity.EXTRA_RESOLUTION, prefs.getInt(KEY_RESOLUTION, 0));
         i.putExtra(SonicRActivity.EXTRA_MSAA, prefs.getInt(KEY_MSAA, 0));
         i.putExtra(SonicRActivity.EXTRA_SMOOTH, prefs.getBoolean(KEY_SMOOTH, false));
+        i.putExtra(SonicRActivity.EXTRA_VSYNC, prefs.getBoolean(KEY_VSYNC, true));
+        i.putExtra(SonicRActivity.EXTRA_FPS, prefs.getBoolean(KEY_FPS, false));
         startActivity(i);
     }
 
@@ -131,6 +133,8 @@ public class LauncherActivity extends Activity {
     static final String KEY_RESOLUTION = "resolution"; // render height, 0 = native
     static final String KEY_MSAA = "msaa";
     static final String KEY_SMOOTH = "smooth";
+    static final String KEY_FPS = "fps";
+    static final String KEY_VSYNC = "vsync";
 
     private void showSettings() {
         android.content.SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
@@ -157,6 +161,14 @@ public class LauncherActivity extends Activity {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sp.topMargin = dp(12);
         box.addView(smooth, sp);
+        android.widget.CheckBox vsync = new android.widget.CheckBox(this);
+        vsync.setText("VSync (no tearing; off can feel more responsive)");
+        vsync.setChecked(prefs.getBoolean(KEY_VSYNC, true));
+        box.addView(vsync);
+        android.widget.CheckBox fps = new android.widget.CheckBox(this);
+        fps.setText("Show FPS counter");
+        fps.setChecked(prefs.getBoolean(KEY_FPS, false));
+        box.addView(fps);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
@@ -168,6 +180,8 @@ public class LauncherActivity extends Activity {
                 .putInt(KEY_RESOLUTION, heights[checkedIndex(res)])
                 .putInt(KEY_MSAA, samples[checkedIndex(aa)])
                 .putBoolean(KEY_SMOOTH, smooth.isChecked())
+                .putBoolean(KEY_VSYNC, vsync.isChecked())
+                .putBoolean(KEY_FPS, fps.isChecked())
                 .apply())
             .setNegativeButton("Cancel", null)
             .show();

@@ -523,7 +523,8 @@ int platform_init(int width, int height, int fullscreen, const char *title)
     SDL_GL_MakeCurrent(g_sdlWindow, g_sdlGLContext);
 
 #ifndef __EMSCRIPTEN__
-    SDL_GL_SetSwapInterval(1);  /* vsync - browser handles this via rAF */
+    extern int g_noVsync;
+    SDL_GL_SetSwapInterval(g_noVsync ? 0 : 1);  /* vsync - browser handles this via rAF */
 #endif
 
     return 0;
@@ -874,8 +875,39 @@ void platform_audio_shutdown(void)
  * SDL platform helpers for render_gl.c
  * ===================================================================== */
 
+#ifdef __ANDROID__
+/* Frames shown over the last half second, read by the launcher's FPS overlay. */
+#include <jni.h>
+static volatile int s_fpsTenths;
+static Uint32 s_fpsStart, s_fpsFrames;
+
+JNIEXPORT jint JNICALL
+Java_com_yuriaaaaa_sonicr_SonicRActivity_nativeFpsTenths(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return s_fpsTenths;
+}
+
+static void count_frame(void)
+{
+    Uint32 now = SDL_GetTicks();
+    if (s_fpsStart == 0) {
+        s_fpsStart = now;
+    }
+    s_fpsFrames++;
+    if (now - s_fpsStart >= 500) {
+        s_fpsTenths = (int)(s_fpsFrames * 10000u / (now - s_fpsStart));
+        s_fpsStart = now;
+        s_fpsFrames = 0;
+    }
+}
+#endif
+
 void platform_gl_swap(void)
 {
+#ifdef __ANDROID__
+    count_frame();
+#endif
     if (g_sdlWindow) {
         SDL_GL_SwapWindow(g_sdlWindow);
     }

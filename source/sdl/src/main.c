@@ -526,6 +526,8 @@ int g_stretchToFill = 0;
 int g_msaaSamples = 0;
 /* --smooth: bilinear filtering on every texture (r_gles2_backend.c). */
 int g_smoothTextures = 0;
+/* --novsync: don't wait for the display refresh on swap (platform_sdl.c). */
+int g_noVsync = 0;
 
 /* WinMain @ 0x004CDFC4 — 8254 bytes */
 int main(int argc, char *argv[])
@@ -542,6 +544,7 @@ int main(int argc, char *argv[])
         {"stretch", no_argument, NULL, 's'},
         {"msaa", required_argument, NULL, 'm'},
         {"smooth", no_argument, NULL, 'l'},
+        {"novsync", no_argument, NULL, 'v'},
         {NULL, 0, NULL, 0}};
     int opt;
     while ((opt = getopt_long(argc, argv, "", long_opts, NULL)) != -1) {
@@ -569,6 +572,9 @@ int main(int argc, char *argv[])
                 break;
             case 'l':
                 g_smoothTextures = 1;
+                break;
+            case 'v':
+                g_noVsync = 1;
                 break;
             case 'n':
                 strncpy(s_cmdUsername, optarg, sizeof(s_cmdUsername) - 1);

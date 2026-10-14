@@ -68,7 +68,7 @@ public class TouchControlsView extends View {
         super(ctx);
         for (int i = 0; i < mTarget.length; i++) mTarget[i] = NONE;
         mStroke.setStyle(Paint.Style.STROKE);
-        mText.setColor(Color.argb(200, 255, 255, 255));
+        mText.setColor(Color.argb(235, 255, 255, 255));
         mText.setTextAlign(Paint.Align.CENTER);
         mPrefs = ctx.getSharedPreferences("touch", Context.MODE_PRIVATE);
         mHidden = mPrefs.getBoolean("hidden", false);
@@ -107,7 +107,9 @@ public class TouchControlsView extends View {
         }
 
         // Hide/show toggle: always drawn so it can be found again.
-        mStroke.setColor(Color.argb(visible ? 140 : 70, 255, 255, 255));
+        mFill.setColor(Color.argb(visible ? 130 : 70, 0, 0, 0));
+        c.drawCircle(mHide.cx, mHide.cy, mHide.r, mFill);
+        mStroke.setColor(Color.argb(visible ? 150 : 80, 255, 255, 255));
         c.drawCircle(mHide.cx, mHide.cy, mHide.r, mStroke);
         c.drawLine(mHide.cx - mHide.r * 0.5f, mHide.cy, mHide.cx + mHide.r * 0.5f, mHide.cy, mStroke);
         if (!visible) {
@@ -116,9 +118,9 @@ public class TouchControlsView extends View {
         }
 
         // D-pad
-        mFill.setColor(Color.argb(50, 255, 255, 255));
+        mFill.setColor(Color.argb(110, 0, 0, 0));
         c.drawCircle(mPadX, mPadY, mPadR, mFill);
-        mStroke.setColor(Color.argb(120, 255, 255, 255));
+        mStroke.setColor(Color.argb(150, 255, 255, 255));
         c.drawCircle(mPadX, mPadY, mPadR, mStroke);
         drawArrow(c, KeyEvent.KEYCODE_DPAD_LEFT, -1, 0);
         drawArrow(c, KeyEvent.KEYCODE_DPAD_RIGHT, 1, 0);
@@ -127,7 +129,7 @@ public class TouchControlsView extends View {
 
         for (Btn b : mButtons) {
             boolean down = mHeld.contains(b.key);
-            mFill.setColor(Color.argb(down ? 140 : 60, 255, 255, 255));
+            mFill.setColor(down ? Color.argb(190, 60, 60, 60) : Color.argb(130, 0, 0, 0));
             c.drawCircle(b.cx, b.cy, b.r, mFill);
             c.drawCircle(b.cx, b.cy, b.r, mStroke);
             c.drawText(b.label, b.cx, b.cy - (mText.descent() + mText.ascent()) / 2, mText);
@@ -137,7 +139,7 @@ public class TouchControlsView extends View {
     private void drawArrow(Canvas c, int key, int dx, int dy) {
         float d = mPadR * 0.62f, s = mPadR * 0.2f;
         float x = mPadX + dx * d, y = mPadY + dy * d;
-        mFill.setColor(Color.argb(mHeld.contains(key) ? 200 : 110, 255, 255, 255));
+        mFill.setColor(Color.argb(mHeld.contains(key) ? 255 : 200, 255, 255, 255));
         android.graphics.Path p = new android.graphics.Path();
         p.moveTo(x + dx * s, y + dy * s);
         p.lineTo(x - dx * s + dy * s, y - dy * s + dx * s);
