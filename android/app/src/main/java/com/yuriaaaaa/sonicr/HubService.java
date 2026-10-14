@@ -84,7 +84,10 @@ public class HubService extends Service {
         if (domain.isEmpty() || token.isEmpty()) return;
         mDuck = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
-                String result = duckUpdate(domain, token);
+                // On mobile data the name would point at the carrier's address, where
+                // nobody can reach this hub; only update from Wi-Fi or Ethernet.
+                String result = onHomeNetwork() ? duckUpdate(domain, token)
+                    : "not updated (this phone isn't on Wi-Fi)";
                 mDuckStatus = "\nDuckDNS " + domain + ".duckdns.org: " + result;
                 new android.os.Handler(android.os.Looper.getMainLooper()).post(this::showRunning);
                 try {
@@ -96,6 +99,13 @@ public class HubService extends Service {
         }, "duckdns");
         mDuck.setDaemon(true);
         mDuck.start();
+    }
+
+    private boolean onHomeNetwork() {
+        android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+        android.net.NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        return caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
     }
 
     private static String duckUpdate(String domain, String token) {
